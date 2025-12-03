@@ -79,6 +79,113 @@ const dcaFrequencies = [
   { value: "monthly", label: "Monthly" },
 ];
 
+// Shared Asset Allocation Component
+interface AssetAllocationProps {
+  allocations: number[];
+  onAllocationsChange: (allocations: number[]) => void;
+  prices: { BTC: number; ETH: number; SOL: number };
+  editable?: boolean;
+  depositAmount?: string;
+}
+
+function AssetAllocation({ 
+  allocations, 
+  onAllocationsChange, 
+  prices, 
+  editable = true,
+  depositAmount 
+}: AssetAllocationProps) {
+  const total = allocations.reduce((a, b) => a + b, 0);
+  const isValid = total === 100;
+
+  return (
+    <div className="space-y-4">
+      <label className="text-sm font-medium">
+        Asset Allocation
+      </label>
+      {cryptoAssets.map((asset, index) => {
+        const allocation = allocations[index];
+        const amount = depositAmount ? (parseFloat(depositAmount) * allocation) / 100 : 0;
+        const price = prices[asset.symbol as keyof typeof prices] || 1;
+        const cryptoAmount = amount / price;
+
+        return (
+          <div key={asset.symbol} className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
+                  style={{ backgroundColor: `${asset.color}20`, color: asset.color }}
+                >
+                  {asset.icon}
+                </div>
+                <span className="font-medium">{asset.symbol}</span>
+                {editable && (
+                  <span className="text-xs text-muted-foreground">
+                    ${formatNumber(price)}
+                  </span>
+                )}
+              </div>
+              <div className="text-right">
+                <span className="font-medium">{allocation}%</span>
+                {depositAmount && amount > 0 && (
+                  <>
+                    <div className="font-medium text-xs mt-0.5">
+                      {cryptoAmount.toFixed(6)} {asset.symbol}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      ≈ ${amount.toFixed(2)}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            {editable ? (
+              <Slider
+                value={[allocation]}
+                max={100}
+                step={5}
+                onValueChange={(value) => {
+                  const newAllocations = [...allocations];
+                  newAllocations[index] = value[0];
+                  onAllocationsChange(newAllocations);
+                }}
+                className="[&_[role=slider]]:bg-white"
+              />
+            ) : (
+              <div className="h-2 rounded-full bg-white/5 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${allocation}%`,
+                    backgroundColor: asset.color,
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {editable && (
+        <div className={cn(
+          "flex items-center gap-2 text-sm p-2 rounded-lg",
+          isValid
+            ? "bg-green-500/10 text-green-400" 
+            : "bg-yellow-500/10 text-yellow-400"
+        )}>
+          {isValid ? (
+            <CheckCircle2 className="w-4 h-4" />
+          ) : (
+            <Info className="w-4 h-4" />
+          )}
+          Total: {total}%
+          {!isValid && " (should equal 100%)"}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function DashboardSection() {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
@@ -110,7 +217,8 @@ export function DashboardSection() {
   const [dcaAmount, setDcaAmount] = useState("500");
   const [dcaFrequency, setDcaFrequency] = useState("weekly");
   const [ltv, setLtv] = useState([50]);
-  const [allocations, setAllocations] = useState([40, 40, 20]);
+  const [dcaAllocations, setDcaAllocations] = useState([40, 40, 20]);
+  const [quickDepositAllocations, setQuickDepositAllocations] = useState([40, 40, 20]);
   const [copied, setCopied] = useState(false);
   const [isDCAActive, setIsDCAActive] = useState(false);
 
@@ -393,59 +501,18 @@ export function DashboardSection() {
                     </div>
 
                     {/* Allocation */}
-                    <div className="space-y-4">
-                      <label className="text-sm font-medium">Asset Allocation</label>
-                      {cryptoAssets.map((asset, index) => (
-                        <div key={asset.symbol} className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <div className="flex items-center gap-2">
-                              <div
-                                className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
-                                style={{ backgroundColor: `${asset.color}20`, color: asset.color }}
-                              >
-                                {asset.icon}
-                              </div>
-                              <span>{asset.symbol}</span>
-                              <span className="text-xs text-muted-foreground">
-                                ${formatNumber(prices[asset.symbol as keyof typeof prices] || 0)}
-                              </span>
-                            </div>
-                            <span className="font-medium">{allocations[index]}%</span>
-                          </div>
-                          <Slider
-                            value={[allocations[index]]}
-                            max={100}
-                            step={5}
-                            onValueChange={(value) => {
-                              const newAllocations = [...allocations];
-                              newAllocations[index] = value[0];
-                              setAllocations(newAllocations);
-                            }}
-                            className="[&_[role=slider]]:bg-white"
-                          />
-                        </div>
-                      ))}
-                      <div className={cn(
-                        "flex items-center gap-2 text-sm p-2 rounded-lg",
-                        allocations.reduce((a, b) => a + b, 0) === 100 
-                          ? "bg-green-500/10 text-green-400" 
-                          : "bg-yellow-500/10 text-yellow-400"
-                      )}>
-                        {allocations.reduce((a, b) => a + b, 0) === 100 ? (
-                          <CheckCircle2 className="w-4 h-4" />
-                        ) : (
-                          <Info className="w-4 h-4" />
-                        )}
-                        Total: {allocations.reduce((a, b) => a + b, 0)}%
-                        {allocations.reduce((a, b) => a + b, 0) !== 100 && " (should equal 100%)"}
-                      </div>
-                    </div>
+                    <AssetAllocation
+                      allocations={dcaAllocations}
+                      onAllocationsChange={setDcaAllocations}
+                      prices={prices}
+                      editable={true}
+                    />
 
                     <Button 
                       variant="gradient" 
                       className="w-full"
                       onClick={() => setIsDCAActive(true)}
-                      disabled={isDCAActive || allocations.reduce((a, b) => a + b, 0) !== 100}
+                      disabled={isDCAActive || dcaAllocations.reduce((a, b) => a + b, 0) !== 100}
                     >
                       <RefreshCw className="w-4 h-4" />
                       {isDCAActive ? "DCA Running" : "Start DCA Strategy"}
@@ -501,41 +568,14 @@ export function DashboardSection() {
                       </div>
                     </div>
 
-                    <div className="p-4 rounded-xl bg-white/5 space-y-3">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">To (Allocation)</span>
-                      </div>
-                      <div className="space-y-2">
-                        {cryptoAssets.map((asset, index) => {
-                          const amount = (parseFloat(depositAmount || "0") * allocations[index]) / 100;
-                          const price = prices[asset.symbol as keyof typeof prices] || 1;
-                          const cryptoAmount = amount / price;
-                          return (
-                            <div
-                              key={asset.symbol}
-                              className="flex items-center justify-between p-3 rounded-lg bg-white/5"
-                            >
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className="w-8 h-8 rounded-lg flex items-center justify-center font-bold"
-                                  style={{ backgroundColor: `${asset.color}20`, color: asset.color }}
-                                >
-                                  {asset.icon}
-                                </div>
-                                <span className="font-medium">{asset.symbol}</span>
-                              </div>
-                              <div className="text-right">
-                                <div className="font-medium">
-                                  {cryptoAmount > 0 ? cryptoAmount.toFixed(6) : "0.00"} {asset.symbol}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  ≈ ${amount.toFixed(2)}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                    <div className="p-4 rounded-xl bg-white/5">
+                      <AssetAllocation
+                        allocations={quickDepositAllocations}
+                        onAllocationsChange={setQuickDepositAllocations}
+                        prices={prices}
+                        editable={true}
+                        depositAmount={depositAmount}
+                      />
                     </div>
 
                     <Button 

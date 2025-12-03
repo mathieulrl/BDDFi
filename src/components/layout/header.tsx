@@ -15,8 +15,9 @@ import {
   Name,
   Identity,
 } from "@coinbase/onchainkit/identity";
-import { useAccount, useChainId } from "wagmi";
-import { Zap, Menu, X, AlertTriangle, Loader2 } from "lucide-react";
+import { useAccount, useChainId, useSwitchChain } from "wagmi";
+import { base, baseSepolia } from "wagmi/chains";
+import { Zap, Menu, X, AlertTriangle, Loader2, Network } from "lucide-react";
 
 const navLinks = [
   { name: "How it works", href: "#how-it-works" },
@@ -27,16 +28,33 @@ const navLinks = [
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [networkMenuOpen, setNetworkMenuOpen] = useState(false);
   const { isConnected } = useAccount();
   const chainId = useChainId();
+  const { switchChain } = useSwitchChain();
   
   // Prevent hydration mismatch - only render wallet UI after mount
   useEffect(() => {
     setMounted(true);
   }, []);
   
-  const isTestnet = chainId === 84532;
-  const networkName = chainId === 84532 ? "Base Sepolia" : chainId === 8453 ? "Base" : "Unknown";
+  // Default to testnet if not connected
+  const currentChainId = chainId || baseSepolia.id;
+  const isTestnet = currentChainId === baseSepolia.id;
+  const networkName = currentChainId === baseSepolia.id ? "Base Sepolia" : currentChainId === base.id ? "Base" : "Unknown";
+  
+  const handleSwitchNetwork = (targetChainId: number) => {
+    if (currentChainId !== targetChainId) {
+      if (isConnected) {
+        switchChain({ chainId: targetChainId });
+      } else {
+        // If not connected, just show a message that they need to connect first
+        // The wallet will prompt to switch network when connecting
+        alert(`Please connect your wallet first. When connecting, you'll be prompted to switch to ${targetChainId === baseSepolia.id ? 'Base Sepolia' : 'Base Mainnet'}.`);
+      }
+      setNetworkMenuOpen(false);
+    }
+  };
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50">
@@ -111,20 +129,75 @@ export function Header() {
                 </div>
               ) : (
                 <>
-                  {/* Network Badge */}
-                  {isConnected && (
-                    <div className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ${
-                      isTestnet 
-                        ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' 
-                        : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                    }`}>
+                  {/* Network Selector - Always visible */}
+                  <div className="relative">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setNetworkMenuOpen(!networkMenuOpen)}
+                      className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium ${
+                        isTestnet 
+                          ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/30' 
+                          : 'bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30'
+                      }`}
+                    >
+                      <Network className="w-3.5 h-3.5" />
                       <span className="relative flex h-2 w-2">
                         <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isTestnet ? 'bg-yellow-400' : 'bg-blue-400'}`} />
                         <span className={`relative inline-flex rounded-full h-2 w-2 ${isTestnet ? 'bg-yellow-500' : 'bg-blue-500'}`} />
                       </span>
-                      {networkName}
-                    </div>
-                  )}
+                      <span className="hidden md:inline">{networkName}</span>
+                      <span className="md:hidden">{isTestnet ? 'Sepolia' : 'Mainnet'}</span>
+                    </Button>
+                    
+                    {/* Network Dropdown */}
+                    {networkMenuOpen && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-40" 
+                          onClick={() => setNetworkMenuOpen(false)}
+                        />
+                        <div className="absolute right-0 top-full mt-2 z-50 min-w-[180px] glass-strong rounded-xl border border-white/10 overflow-hidden shadow-xl">
+                          <div className="p-1">
+                            <button
+                              onClick={() => handleSwitchNetwork(baseSepolia.id)}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${
+                                currentChainId === baseSepolia.id
+                                  ? 'bg-yellow-500/20 text-yellow-400'
+                                  : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
+                              }`}
+                            >
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-yellow-400" />
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500" />
+                              </span>
+                              <span>Base Sepolia</span>
+                              {currentChainId === baseSepolia.id && (
+                                <span className="ml-auto text-xs">✓</span>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleSwitchNetwork(base.id)}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${
+                                currentChainId === base.id
+                                  ? 'bg-blue-500/20 text-blue-400'
+                                  : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
+                              }`}
+                            >
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-blue-400" />
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500" />
+                              </span>
+                              <span>Base Mainnet</span>
+                              {currentChainId === base.id && (
+                                <span className="ml-auto text-xs">✓</span>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
                   
                   <Wallet>
                     <ConnectWallet>

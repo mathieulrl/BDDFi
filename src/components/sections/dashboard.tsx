@@ -1,0 +1,931 @@
+"use client";
+
+import { motion, useInView } from "framer-motion";
+import { useRef, useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
+import { CardContent, CardHeader, CardTitle, GlassCard, StatsCard } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Slider } from "@/components/ui/slider";
+import { HealthFactorGauge } from "@/components/ui/progress";
+import { useAccount, useBalance, useChainId } from "wagmi";
+import { 
+  ConnectWallet, 
+  Wallet,
+} from "@coinbase/onchainkit/wallet";
+import {
+  Address,
+  Avatar,
+  Name,
+  Identity,
+} from "@coinbase/onchainkit/identity";
+import {
+  Wallet as WalletIcon,
+  TrendingUp,
+  ArrowDownUp,
+  Landmark,
+  DollarSign,
+  Coins,
+  Clock,
+  AlertTriangle,
+  CheckCircle2,
+  Info,
+  Settings,
+  RefreshCw,
+  ArrowUpRight,
+  BarChart3,
+  Shield,
+  ExternalLink,
+  Copy,
+  Check,
+} from "lucide-react";
+import { cn, formatCurrency, formatNumber, calculateHealthFactor, shortenAddress } from "@/lib/utils";
+import { useUserAccountData } from "@/hooks/useAave";
+import { usePrices } from "@/hooks/usePrices";
+import { getContracts } from "@/lib/contracts";
+
+const cryptoAssets = [
+  { 
+    symbol: "BTC", 
+    name: "Bitcoin (cbBTC)", 
+    icon: "₿",
+    color: "#F7931A",
+    allocation: 40,
+    apy: 0.5,
+  },
+  { 
+    symbol: "ETH", 
+    name: "Ethereum", 
+    icon: "Ξ",
+    color: "#627EEA",
+    allocation: 40,
+    apy: 2.1,
+  },
+  { 
+    symbol: "SOL", 
+    name: "Solana", 
+    icon: "◎",
+    color: "#14F195",
+    allocation: 20,
+    apy: 3.5,
+  },
+];
+
+const dcaFrequencies = [
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "biweekly", label: "Bi-Weekly" },
+  { value: "monthly", label: "Monthly" },
+];
+
+export function DashboardSection() {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, margin: "-100px" });
+  const [mounted, setMounted] = useState(false);
+  const { isConnected, address } = useAccount();
+  const chainId = useChainId();
+  const { getPrice } = usePrices();
+  
+  // Prevent hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  
+  // Get contracts for current chain (default to baseSepolia for SSR)
+  const contracts = getContracts(mounted ? chainId : 84532);
+  
+  // AAVE data
+  const { data: aaveData, isLoading: aaveLoading } = useUserAccountData();
+  
+  // USDC Balance
+  const { data: usdcBalance } = useBalance({
+    address: address,
+    token: contracts.USDC,
+  });
+  
+  // Local state
+  const [depositAmount, setDepositAmount] = useState("");
+  const [borrowAmount, setBorrowAmount] = useState("");
+  const [dcaAmount, setDcaAmount] = useState("500");
+  const [dcaFrequency, setDcaFrequency] = useState("weekly");
+  const [ltv, setLtv] = useState([50]);
+  const [allocations, setAllocations] = useState([40, 40, 20]);
+  const [copied, setCopied] = useState(false);
+  const [isDCAActive, setIsDCAActive] = useState(false);
+
+  // Get prices
+  const btcPrice = getPrice("BTC") || 67500;
+  const ethPrice = getPrice("ETH") || 3450;
+  const solPrice = getPrice("SOL") || 185;
+  const prices = { BTC: btcPrice, ETH: ethPrice, SOL: solPrice };
+
+  // Calculate values from AAVE data or use mock
+  const totalDeposited = aaveData?.totalCollateralUSD || 0;
+  const totalBorrowed = aaveData?.totalDebtUSD || 0;
+  const availableToBorrow = aaveData?.availableBorrowsUSD || 0;
+  const healthFactor = aaveData?.healthFactor || (totalBorrowed > 0 ? calculateHealthFactor(totalDeposited, totalBorrowed) : Infinity);
+  const portfolioValue = totalDeposited + (Number(usdcBalance?.formatted || 0));
+
+  // Copy address to clipboard
+  const copyAddress = () => {
+    if (address) {
+      navigator.clipboard.writeText(address);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  // Format USDC balance
+  const usdcBalanceFormatted = usdcBalance ? Number(usdcBalance.formatted).toFixed(2) : "0.00";
+
+  // Show loading state until mounted to prevent hydration mismatch
+  if (!mounted) {
+    return (
+      <section id="dashboard" className="relative py-32 px-6" ref={ref}>
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center">
+            <span className="text-sm font-medium text-bitcoin mb-4 block">
+              DASHBOARD
+            </span>
+            <h2 className="font-display text-4xl md:text-5xl font-bold mb-6">
+              Loading...
+            </h2>
+            <div className="flex justify-center">
+              <Loader2 className="w-8 h-8 animate-spin text-bitcoin" />
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (!isConnected) {
+    return (
+      <section id="dashboard" className="relative py-32 px-6" ref={ref}>
+        <div className="max-w-4xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={isInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.5 }}
+            className="text-center"
+          >
+            <span className="text-sm font-medium text-bitcoin mb-4 block">
+              DASHBOARD
+            </span>
+            <h2 className="font-display text-4xl md:text-5xl font-bold mb-6">
+              Connect to Get Started
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-xl mx-auto mb-12">
+              Connect your wallet to access the Buy, Borrow, Die dashboard.
+              Start building your crypto-backed financial strategy today.
+            </p>
+
+            <GlassCard className="max-w-md mx-auto p-8">
+              <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-bitcoin/20 to-ethereum/20 flex items-center justify-center mx-auto mb-6">
+                <WalletIcon className="w-10 h-10 text-bitcoin" />
+              </div>
+              <h3 className="font-display font-bold text-xl mb-4">
+                Welcome to BBDFi
+              </h3>
+              <p className="text-muted-foreground text-sm mb-6">
+                Connect with Coinbase Smart Wallet for the best experience.
+                Gasless transactions, easy onboarding.
+              </p>
+              <Wallet>
+                <ConnectWallet className="!w-full !rounded-xl !py-3" />
+              </Wallet>
+            </GlassCard>
+          </motion.div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section id="dashboard" className="relative py-32 px-6" ref={ref}>
+      <div className="max-w-7xl mx-auto">
+        {/* Section header with wallet info */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={isInView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.5 }}
+          className="text-center mb-12"
+        >
+          <span className="text-sm font-medium text-bitcoin mb-4 block">
+            DASHBOARD
+          </span>
+          <h2 className="font-display text-4xl md:text-5xl font-bold mb-4">
+            Your <span className="gradient-text">BBD</span> Strategy
+          </h2>
+          
+          {/* Connected wallet info */}
+          <div className="flex items-center justify-center gap-4 mt-6">
+            <div className="glass rounded-full px-4 py-2 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-bitcoin to-ethereum flex items-center justify-center">
+                <Identity address={address} className="!bg-transparent">
+                  <Avatar className="w-8 h-8" />
+                </Identity>
+              </div>
+              <div className="text-left">
+                <Identity address={address} className="!bg-transparent">
+                  <Name className="text-sm font-medium" />
+                </Identity>
+                <button 
+                  onClick={copyAddress}
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                >
+                  {shortenAddress(address || "")}
+                  {copied ? <Check className="w-3 h-3 text-green-500" /> : <Copy className="w-3 h-3" />}
+                </button>
+              </div>
+            </div>
+            <a
+              href={`https://${chainId === 84532 ? 'sepolia.' : ''}basescan.org/address/${address}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="glass rounded-full p-2 hover:bg-white/10 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          </div>
+        </motion.div>
+
+        {/* Stats Grid */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={isInView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8"
+        >
+          <StatsCard
+            label="USDC Balance"
+            value={`$${usdcBalanceFormatted}`}
+            icon={<DollarSign className="w-5 h-5 text-usdc" />}
+            subValue="Available to invest"
+          />
+          <StatsCard
+            label="Total Deposited"
+            value={formatCurrency(totalDeposited)}
+            icon={<Shield className="w-5 h-5 text-ethereum" />}
+            subValue="in AAVE V3"
+          />
+          <StatsCard
+            label="Total Borrowed"
+            value={formatCurrency(totalBorrowed)}
+            icon={<Landmark className="w-5 h-5 text-bitcoin" />}
+            subValue="USDC"
+          />
+          <StatsCard
+            label="Available to Borrow"
+            value={formatCurrency(availableToBorrow)}
+            icon={<BarChart3 className="w-5 h-5 text-solana" />}
+            subValue="at current LTV"
+          />
+        </motion.div>
+
+        {/* Health Factor */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={isInView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.5, delay: 0.15 }}
+          className="mb-8"
+        >
+          <GlassCard className="p-6">
+            <HealthFactorGauge value={healthFactor} />
+            {totalBorrowed === 0 && (
+              <p className="text-center text-sm text-muted-foreground mt-4">
+                No active borrows. Deposit crypto and borrow USDC to start your BBD strategy!
+              </p>
+            )}
+          </GlassCard>
+        </motion.div>
+
+        {/* Main Dashboard Tabs */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={isInView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.5, delay: 0.2 }}
+        >
+          <Tabs defaultValue="buy" className="space-y-6">
+            <TabsList className="grid grid-cols-3 w-full max-w-md mx-auto">
+              <TabsTrigger value="buy" className="gap-2">
+                <Coins className="w-4 h-4" />
+                Buy
+              </TabsTrigger>
+              <TabsTrigger value="borrow" className="gap-2">
+                <Landmark className="w-4 h-4" />
+                Borrow
+              </TabsTrigger>
+              <TabsTrigger value="portfolio" className="gap-2">
+                <BarChart3 className="w-4 h-4" />
+                Portfolio
+              </TabsTrigger>
+            </TabsList>
+
+            {/* BUY TAB */}
+            <TabsContent value="buy">
+              <div className="grid lg:grid-cols-2 gap-6">
+                {/* DCA Setup */}
+                <GlassCard>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <RefreshCw className="w-5 h-5 text-bitcoin" />
+                      DCA Strategy
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* DCA Status */}
+                    {isDCAActive && (
+                      <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                          </span>
+                          <span className="text-sm text-green-400 font-medium">DCA Active</span>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => setIsDCAActive(false)}
+                          className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                        >
+                          Stop
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Amount Input */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Amount per period (USDC)</label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                          type="number"
+                          value={dcaAmount}
+                          onChange={(e) => setDcaAmount(e.target.value)}
+                          className="pl-9"
+                          placeholder="500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Frequency */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Frequency</label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {dcaFrequencies.map((freq) => (
+                          <button
+                            key={freq.value}
+                            onClick={() => setDcaFrequency(freq.value)}
+                            className={cn(
+                              "px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                              dcaFrequency === freq.value
+                                ? "bg-bitcoin text-white"
+                                : "bg-white/5 hover:bg-white/10"
+                            )}
+                          >
+                            {freq.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Allocation */}
+                    <div className="space-y-4">
+                      <label className="text-sm font-medium">Asset Allocation</label>
+                      {cryptoAssets.map((asset, index) => (
+                        <div key={asset.symbol} className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
+                                style={{ backgroundColor: `${asset.color}20`, color: asset.color }}
+                              >
+                                {asset.icon}
+                              </div>
+                              <span>{asset.symbol}</span>
+                              <span className="text-xs text-muted-foreground">
+                                ${formatNumber(prices[asset.symbol as keyof typeof prices] || 0)}
+                              </span>
+                            </div>
+                            <span className="font-medium">{allocations[index]}%</span>
+                          </div>
+                          <Slider
+                            value={[allocations[index]]}
+                            max={100}
+                            step={5}
+                            onValueChange={(value) => {
+                              const newAllocations = [...allocations];
+                              newAllocations[index] = value[0];
+                              setAllocations(newAllocations);
+                            }}
+                            className="[&_[role=slider]]:bg-white"
+                          />
+                        </div>
+                      ))}
+                      <div className={cn(
+                        "flex items-center gap-2 text-sm p-2 rounded-lg",
+                        allocations.reduce((a, b) => a + b, 0) === 100 
+                          ? "bg-green-500/10 text-green-400" 
+                          : "bg-yellow-500/10 text-yellow-400"
+                      )}>
+                        {allocations.reduce((a, b) => a + b, 0) === 100 ? (
+                          <CheckCircle2 className="w-4 h-4" />
+                        ) : (
+                          <Info className="w-4 h-4" />
+                        )}
+                        Total: {allocations.reduce((a, b) => a + b, 0)}%
+                        {allocations.reduce((a, b) => a + b, 0) !== 100 && " (should equal 100%)"}
+                      </div>
+                    </div>
+
+                    <Button 
+                      variant="gradient" 
+                      className="w-full"
+                      onClick={() => setIsDCAActive(true)}
+                      disabled={isDCAActive || allocations.reduce((a, b) => a + b, 0) !== 100}
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      {isDCAActive ? "DCA Running" : "Start DCA Strategy"}
+                    </Button>
+                  </CardContent>
+                </GlassCard>
+
+                {/* Quick Deposit */}
+                <GlassCard>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <ArrowDownUp className="w-5 h-5 text-ethereum" />
+                      Quick Deposit
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="p-4 rounded-xl bg-white/5 space-y-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">From</span>
+                        <span className="font-medium">USDC Balance: ${usdcBalanceFormatted}</span>
+                      </div>
+                      <div className="relative">
+                        <Input
+                          type="number"
+                          value={depositAmount}
+                          onChange={(e) => setDepositAmount(e.target.value)}
+                          className="text-2xl font-bold h-14 pr-20"
+                          placeholder="0.00"
+                        />
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-usdc flex items-center justify-center text-xs font-bold text-white">
+                            $
+                          </div>
+                          <span className="font-medium">USDC</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        {[25, 50, 75, 100].map((pct) => (
+                          <button
+                            key={pct}
+                            onClick={() => setDepositAmount(String((Number(usdcBalanceFormatted) * pct / 100).toFixed(2)))}
+                            className="flex-1 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium transition-colors"
+                          >
+                            {pct}%
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-center">
+                      <div className="p-2 rounded-full bg-white/5">
+                        <ArrowDownUp className="w-4 h-4" />
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-white/5 space-y-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">To (Allocation)</span>
+                      </div>
+                      <div className="space-y-2">
+                        {cryptoAssets.map((asset, index) => {
+                          const amount = (parseFloat(depositAmount || "0") * allocations[index]) / 100;
+                          const price = prices[asset.symbol as keyof typeof prices] || 1;
+                          const cryptoAmount = amount / price;
+                          return (
+                            <div
+                              key={asset.symbol}
+                              className="flex items-center justify-between p-3 rounded-lg bg-white/5"
+                            >
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="w-8 h-8 rounded-lg flex items-center justify-center font-bold"
+                                  style={{ backgroundColor: `${asset.color}20`, color: asset.color }}
+                                >
+                                  {asset.icon}
+                                </div>
+                                <span className="font-medium">{asset.symbol}</span>
+                              </div>
+                              <div className="text-right">
+                                <div className="font-medium">
+                                  {cryptoAmount > 0 ? cryptoAmount.toFixed(6) : "0.00"} {asset.symbol}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  ≈ ${amount.toFixed(2)}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <Button 
+                      variant="gradient" 
+                      className="w-full" 
+                      disabled={!depositAmount || parseFloat(depositAmount) <= 0}
+                    >
+                      <Coins className="w-4 h-4" />
+                      Deposit & Convert
+                    </Button>
+                    
+                    {Number(usdcBalanceFormatted) === 0 && (
+                      <p className="text-xs text-center text-muted-foreground">
+                        You need USDC to deposit. Get USDC on Base via{" "}
+                        <a 
+                          href="https://www.coinbase.com" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-bitcoin hover:underline"
+                        >
+                          Coinbase
+                        </a>
+                      </p>
+                    )}
+                  </CardContent>
+                </GlassCard>
+              </div>
+            </TabsContent>
+
+            {/* BORROW TAB */}
+            <TabsContent value="borrow">
+              <div className="grid lg:grid-cols-2 gap-6">
+                {/* Borrow Form */}
+                <GlassCard>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Landmark className="w-5 h-5 text-usdc" />
+                      Borrow USDC
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {totalDeposited === 0 ? (
+                      <div className="text-center py-8">
+                        <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-4">
+                          <Shield className="w-8 h-8 text-muted-foreground" />
+                        </div>
+                        <h4 className="font-display font-semibold mb-2">No Collateral</h4>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Deposit crypto first to use as collateral for borrowing USDC.
+                        </p>
+                        <Button variant="outline" onClick={() => {
+                          const buyTab = document.querySelector('[data-state="inactive"][value="buy"]') as HTMLElement;
+                          buyTab?.click();
+                        }}>
+                          Go to Deposit
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Collateral Info */}
+                        <div className="p-4 rounded-xl bg-gradient-to-br from-ethereum/10 to-bitcoin/10 border border-white/10">
+                          <div className="flex items-center justify-between mb-4">
+                            <span className="text-sm text-muted-foreground">Your Collateral</span>
+                            <span className="font-display font-bold">{formatCurrency(totalDeposited)}</span>
+                          </div>
+                          <div className="space-y-2">
+                            {cryptoAssets.map((asset) => (
+                              <div key={asset.symbol} className="flex items-center justify-between text-sm">
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className="w-6 h-6 rounded flex items-center justify-center text-xs font-bold"
+                                    style={{ backgroundColor: `${asset.color}20`, color: asset.color }}
+                                  >
+                                    {asset.icon}
+                                  </div>
+                                  <span>{asset.symbol}</span>
+                                </div>
+                                <span>${(totalDeposited * asset.allocation / 100).toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* LTV Slider */}
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium">Loan-to-Value Ratio</label>
+                            <span className="font-display font-bold text-lg">{ltv[0]}%</span>
+                          </div>
+                          <Slider
+                            value={ltv}
+                            max={80}
+                            min={10}
+                            step={5}
+                            onValueChange={setLtv}
+                            className="[&_[role=slider]]:bg-white"
+                          />
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Conservative (10%)</span>
+                            <span>Max (80%)</span>
+                          </div>
+                          <div className={cn(
+                            "flex items-center gap-2 p-3 rounded-lg text-sm",
+                            ltv[0] <= 50 ? "bg-green-500/10 text-green-400" :
+                            ltv[0] <= 70 ? "bg-yellow-500/10 text-yellow-400" :
+                            "bg-red-500/10 text-red-400"
+                          )}>
+                            {ltv[0] <= 50 ? <CheckCircle2 className="w-4 h-4" /> :
+                             ltv[0] <= 70 ? <Info className="w-4 h-4" /> :
+                             <AlertTriangle className="w-4 h-4" />}
+                            {ltv[0] <= 50 ? "Safe zone - Low liquidation risk" :
+                             ltv[0] <= 70 ? "Moderate risk - Monitor regularly" :
+                             "High risk - Close to liquidation threshold"}
+                          </div>
+                        </div>
+
+                        {/* Borrow Amount */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium">Borrow Amount</label>
+                            <span className="text-sm text-muted-foreground">
+                              Max: {formatCurrency(totalDeposited * 0.8)}
+                            </span>
+                          </div>
+                          <div className="relative">
+                            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                            <Input
+                              type="number"
+                              value={borrowAmount || String((totalDeposited * ltv[0] / 100).toFixed(2))}
+                              onChange={(e) => setBorrowAmount(e.target.value)}
+                              className="pl-9 text-xl font-bold"
+                              placeholder="0.00"
+                            />
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                              USDC
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Summary */}
+                        <div className="space-y-2 p-4 rounded-xl bg-white/5">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Interest Rate (APY)</span>
+                            <span className="text-green-400">4.2%</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Monthly Cost</span>
+                            <span>~${((parseFloat(borrowAmount || String(totalDeposited * ltv[0] / 100))) * 0.042 / 12).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">New Health Factor</span>
+                            <span className={cn(
+                              "font-medium",
+                              calculateHealthFactor(totalDeposited, totalBorrowed + parseFloat(borrowAmount || String(totalDeposited * ltv[0] / 100))) > 1.5 ? "text-green-400" : "text-yellow-400"
+                            )}>
+                              {calculateHealthFactor(totalDeposited, totalBorrowed + parseFloat(borrowAmount || String(totalDeposited * ltv[0] / 100))).toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <Button variant="gradient" className="w-full">
+                          <Landmark className="w-4 h-4" />
+                          Borrow USDC
+                        </Button>
+                      </>
+                    )}
+                  </CardContent>
+                </GlassCard>
+
+                {/* Active Position */}
+                <GlassCard>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-solana" />
+                      Active Position
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {totalBorrowed === 0 ? (
+                      <div className="text-center py-8">
+                        <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-4">
+                          <Landmark className="w-8 h-8 text-muted-foreground" />
+                        </div>
+                        <h4 className="font-display font-semibold mb-2">No Active Loans</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Borrow USDC against your crypto to start living the BBD lifestyle!
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Current Loan */}
+                        <div className="p-4 rounded-xl bg-gradient-to-br from-usdc/10 to-ethereum/10 border border-white/10">
+                          <div className="flex items-center justify-between mb-4">
+                            <span className="text-sm text-muted-foreground">Currently Borrowed</span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full bg-usdc flex items-center justify-center text-xs font-bold text-white">
+                                $
+                              </div>
+                              <span className="font-display font-bold text-2xl">{formatNumber(totalBorrowed)}</span>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-1">Interest Accrued</p>
+                              <p className="font-medium">${(totalBorrowed * 0.042 / 12).toFixed(2)}/mo</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground mb-1">APY</p>
+                              <p className="font-medium text-green-400">4.2%</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Liquidation Info */}
+                        <div className="p-4 rounded-xl bg-white/5">
+                          <div className="flex items-center gap-2 mb-3">
+                            <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                            <span className="text-sm font-medium">Liquidation Thresholds</span>
+                          </div>
+                          <div className="space-y-2">
+                            {cryptoAssets.map((asset) => {
+                              const price = prices[asset.symbol as keyof typeof prices] || 1;
+                              return (
+                                <div key={asset.symbol} className="flex items-center justify-between text-sm">
+                                  <div className="flex items-center gap-2">
+                                    <div
+                                      className="w-5 h-5 rounded flex items-center justify-center text-xs font-bold"
+                                      style={{ backgroundColor: `${asset.color}20`, color: asset.color }}
+                                    >
+                                      {asset.icon}
+                                    </div>
+                                    <span>{asset.symbol}</span>
+                                  </div>
+                                  <span className="text-muted-foreground">
+                                    ${(price * 0.65).toFixed(0)}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Quick Actions */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <Button variant="outline" className="w-full">
+                            <ArrowUpRight className="w-4 h-4" />
+                            Repay
+                          </Button>
+                          <Button variant="outline" className="w-full">
+                            <TrendingUp className="w-4 h-4" />
+                            Add Collateral
+                          </Button>
+                        </div>
+                      </>
+                    )}
+
+                    {/* AAVE Link */}
+                    <a
+                      href={`https://app.aave.com/?marketName=${chainId === 84532 ? 'proto_base_sepolia_v3' : 'proto_base_v3'}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors text-sm text-muted-foreground"
+                    >
+                      Manage on AAVE
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </CardContent>
+                </GlassCard>
+              </div>
+            </TabsContent>
+
+            {/* PORTFOLIO TAB */}
+            <TabsContent value="portfolio">
+              <div className="grid lg:grid-cols-3 gap-6">
+                {/* Holdings */}
+                <GlassCard className="lg:col-span-2">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-bitcoin" />
+                      Holdings
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {totalDeposited === 0 ? (
+                      <div className="text-center py-8">
+                        <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-4">
+                          <BarChart3 className="w-8 h-8 text-muted-foreground" />
+                        </div>
+                        <h4 className="font-display font-semibold mb-2">No Holdings Yet</h4>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Start by depositing USDC and converting to crypto assets.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {cryptoAssets.map((asset) => {
+                          const value = totalDeposited * asset.allocation / 100;
+                          const price = prices[asset.symbol as keyof typeof prices] || 1;
+                          const amount = value / price;
+                          return (
+                            <div
+                              key={asset.symbol}
+                              className="flex items-center justify-between p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+                            >
+                              <div className="flex items-center gap-4">
+                                <div
+                                  className="w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold"
+                                  style={{ backgroundColor: `${asset.color}20`, color: asset.color }}
+                                >
+                                  {asset.icon}
+                                </div>
+                                <div>
+                                  <h4 className="font-display font-semibold">{asset.name}</h4>
+                                  <p className="text-sm text-muted-foreground">
+                                    {amount.toFixed(6)} {asset.symbol}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-display font-semibold">{formatCurrency(value)}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  @ ${formatNumber(price)}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardContent>
+                </GlassCard>
+
+                {/* Strategy Summary */}
+                <GlassCard>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Settings className="w-5 h-5 text-ethereum" />
+                      Strategy
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="p-3 rounded-lg bg-white/5">
+                      <p className="text-xs text-muted-foreground mb-1">DCA Status</p>
+                      <div className="flex items-center gap-2">
+                        {isDCAActive ? (
+                          <>
+                            <span className="relative flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                            </span>
+                            <span className="font-medium text-green-400">Active</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="relative flex h-2 w-2">
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-muted-foreground" />
+                            </span>
+                            <span className="font-medium text-muted-foreground">Inactive</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="p-3 rounded-lg bg-white/5">
+                      <p className="text-xs text-muted-foreground mb-1">DCA Amount</p>
+                      <p className="font-medium">${dcaAmount}/{dcaFrequency}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-white/5">
+                      <p className="text-xs text-muted-foreground mb-1">Total Deposited</p>
+                      <p className="font-medium">{formatCurrency(totalDeposited)}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-white/5">
+                      <p className="text-xs text-muted-foreground mb-1">Total Borrowed</p>
+                      <p className="font-medium">{formatCurrency(totalBorrowed)}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-white/5">
+                      <p className="text-xs text-muted-foreground mb-1">Net Position</p>
+                      <p className={cn(
+                        "font-display font-bold text-lg",
+                        totalDeposited - totalBorrowed >= 0 ? "text-green-400" : "text-red-400"
+                      )}>
+                        {formatCurrency(totalDeposited - totalBorrowed)}
+                      </p>
+                    </div>
+                  </CardContent>
+                </GlassCard>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </motion.div>
+      </div>
+    </section>
+  );
+}

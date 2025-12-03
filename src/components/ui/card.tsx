@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
+import { motion, type HTMLMotionProps } from "framer-motion";
 
 const Card = React.forwardRef<
   HTMLDivElement,
@@ -85,7 +85,7 @@ CardFooter.displayName = "CardFooter";
 // Animated glass card
 const GlassCard = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & { hover?: boolean }
+  Omit<HTMLMotionProps<"div">, "children"> & { hover?: boolean; children?: React.ReactNode }
 >(({ className, hover = true, children, ...props }, ref) => (
   <motion.div
     ref={ref}
@@ -106,7 +106,7 @@ GlassCard.displayName = "GlassCard";
 // Stats card
 const StatsCard = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & {
+  Omit<HTMLMotionProps<"div">, "children"> & {
     label: string;
     value: string | number;
     subValue?: string;

@@ -42,7 +42,7 @@ import {
   Check,
 } from "lucide-react";
 import { cn, formatCurrency, formatNumber, calculateHealthFactor, shortenAddress } from "@/lib/utils";
-import { useUserAccountData, useApprove, useSupply } from "@/hooks/useAave";
+import { useUserAccountData, useApprove, useSupply, useBorrow } from "@/hooks/useAave";
 import { useOnchainKitSwap } from "@/hooks/useOnchainKitSwap";
 import { usePrices } from "@/hooks/usePrices";
 import { getContracts } from "@/lib/contracts";
@@ -215,6 +215,7 @@ export function DashboardSection() {
   const { sendTransactionAsync, isPending: isSendingTx } = useSendTransaction();
   const { approve } = useApprove();
   const { supply } = useSupply();
+  const { borrow, isPending: isBorrowPending, isConfirming: isBorrowConfirming } = useBorrow();
   
   // Local state
   const [depositAmount, setDepositAmount] = useState("");
@@ -277,6 +278,14 @@ export function DashboardSection() {
 
   // Format USDC balance
   const usdcBalanceFormatted = usdcBalance ? Number(usdcBalance.formatted).toFixed(2) : "0.00";
+
+  // Helper to get target borrow amount in USD from state (respecting LTV slider)
+  const getTargetBorrowAmount = () => {
+    const fallback = totalDeposited * ltv[0] / 100;
+    const raw = borrowAmount ? parseFloat(borrowAmount) : fallback;
+    if (!Number.isFinite(raw) || raw <= 0) return 0;
+    return raw;
+  };
 
   // STEP 1: Swaps only (OnchainKit, 1 tx par swap)
   const handleSwapOnly = async () => {
@@ -944,22 +953,64 @@ export function DashboardSection() {
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">Monthly Cost</span>
-                            <span>~${((parseFloat(borrowAmount || String(totalDeposited * ltv[0] / 100))) * 0.042 / 12).toFixed(2)}</span>
+                            <span>~${(getTargetBorrowAmount() * 0.042 / 12).toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">New Health Factor</span>
                             <span className={cn(
                               "font-medium",
-                              calculateHealthFactor(totalDeposited, totalBorrowed + parseFloat(borrowAmount || String(totalDeposited * ltv[0] / 100))) > 1.5 ? "text-green-400" : "text-yellow-400"
+                              calculateHealthFactor(totalDeposited, totalBorrowed + getTargetBorrowAmount()) > 1.5 ? "text-green-400" : "text-yellow-400"
                             )}>
-                              {calculateHealthFactor(totalDeposited, totalBorrowed + parseFloat(borrowAmount || String(totalDeposited * ltv[0] / 100))).toFixed(2)}
+                              {calculateHealthFactor(totalDeposited, totalBorrowed + getTargetBorrowAmount()).toFixed(2)}
                             </span>
                           </div>
                         </div>
 
-                        <Button variant="gradient" className="w-full">
-                          <Landmark className="w-4 h-4" />
-                          Borrow USDC
+                        <Button
+                          variant="gradient"
+                          className="w-full"
+                          disabled={
+                            isBorrowPending ||
+                            isBorrowConfirming ||
+                            getTargetBorrowAmount() <= 0 ||
+                            getTargetBorrowAmount() > totalDeposited * 0.8
+                          }
+                          onClick={async () => {
+                            if (!address) {
+                              alert("Connect your wallet first");
+                              return;
+                            }
+                            if (totalDeposited === 0) {
+                              alert("You need collateral deposited in Aave before borrowing.");
+                              return;
+                            }
+                            const amountUsd = getTargetBorrowAmount();
+                            const maxBorrowUsd = totalDeposited * 0.8;
+                            if (amountUsd > maxBorrowUsd) {
+                              alert(`Borrow amount exceeds safe maximum (${maxBorrowUsd.toFixed(2)} USDC).`);
+                              return;
+                            }
+                            try {
+                              const amountWei = BigInt(Math.round(amountUsd * 1_000_000)); // USDC 6 decimals
+                              await borrow(contracts.USDC as `0x${string}`, amountWei);
+                              alert(`✅ Borrowed ${amountUsd.toFixed(2)} USDC from Aave.`);
+                            } catch (err: any) {
+                              console.error("Error borrowing USDC:", err);
+                              alert(`Error borrowing USDC: ${err.message || "Transaction failed."}`);
+                            }
+                          }}
+                        >
+                          {isBorrowPending || isBorrowConfirming ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Borrowing...
+                            </>
+                          ) : (
+                            <>
+                              <Landmark className="w-4 h-4" />
+                              Borrow USDC
+                            </>
+                          )}
                         </Button>
                       </>
                     )}

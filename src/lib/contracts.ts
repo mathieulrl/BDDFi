@@ -12,6 +12,13 @@ export const CONTRACTS = {
     WETH: "0x4200000000000000000000000000000000000006" as const,
     cbBTC: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf" as const,
     cbETH: "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22" as const,
+    WBTC: "0x29f2D40B0605204364c54D4cEE5132adD012B9C2" as const, // WBTC on Base (not used on mainnet, we use cbBTC)
+    
+    // Uniswap V3 Router (SwapRouter02 on Base)
+    UNISWAP_ROUTER: "0x2626664c2603336E57B271c5C0b26F421741e481" as const, // Uniswap V3 SwapRouter02 on Base
+    
+    // Multicall3 for batching transactions
+    MULTICALL3: "0xcA11bde05977b3631167028862bE2a173976CA11" as const, // Multicall3 (same address on all chains)
     
     // AAVE aTokens (supply receipts)
     aUSDC: "0x4e65fE4DbA92790696d040ac24Aa414708F5c0AB" as const,
@@ -31,6 +38,14 @@ export const CONTRACTS = {
     // Tokens (Testnet versions)
     USDC: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" as const,
     WETH: "0x4200000000000000000000000000000000000006" as const,
+    WBTC: "0x54114591963CF60EF3aA63bEfD6eC263D98145a4" as const, // WBTC on Base Sepolia (from Aave)
+    cbETH: "0xD171b9694f7A2597Ed006D41f7509aaD4B485c4B" as const, // cbETH on Base Sepolia (from Aave)
+    
+    // Uniswap V3 Router (SwapRouter02 on Base Sepolia)
+    UNISWAP_ROUTER: "0x2626664c2603336E57B271c5C0b26F421741e481" as const, // Uniswap V3 SwapRouter02 on Base Sepolia
+    
+    // Multicall3 for batching transactions
+    MULTICALL3: "0xcA11bde05977b3631167028862bE2a173976CA11" as const, // Multicall3 (same address on all chains)
     
     // AAVE aTokens
     aUSDC: "0x460b97BD498E1157530AEb3086301d5225b91216" as const,
@@ -70,6 +85,13 @@ export const TOKENS = {
     decimals: 18,
     icon: "Ξ",
     color: "#627EEA",
+  },
+  WBTC: {
+    symbol: "WBTC",
+    name: "Wrapped Bitcoin",
+    decimals: 8,
+    icon: "₿",
+    color: "#F7931A",
   },
 } as const;
 

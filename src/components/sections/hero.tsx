@@ -19,7 +19,6 @@ const stats = [
 const cryptoLogos = [
   { name: "BTC", color: "#F7931A", symbol: "₿" },
   { name: "ETH", color: "#627EEA", symbol: "Ξ" },
-  { name: "SOL", color: "#14F195", symbol: "◎" },
 ];
 
 export function HeroSection() {
@@ -90,7 +89,7 @@ export function HeroSection() {
         >
           <span className="gradient-text">Buy.</span>{" "}
           <span className="gradient-text-blue">Borrow.</span>{" "}
-          <span className="text-solana">Die.</span>
+          <span className="text-ethereum">Die.</span>
         </motion.h1>
 
         {/* Subtitle */}
@@ -133,7 +132,7 @@ export function HeroSection() {
           ) : (
             <Wallet>
               <ConnectWallet 
-                className="!bg-gradient-to-r !from-bitcoin !via-ethereum !to-solana hover:!opacity-90 !rounded-2xl !px-12 !h-16 !text-lg !font-semibold !text-white !shadow-xl !shadow-bitcoin/25"
+                className="!bg-gradient-to-r !from-bitcoin !to-ethereum hover:!opacity-90 !rounded-2xl !px-12 !h-16 !text-lg !font-semibold !text-white !shadow-xl !shadow-bitcoin/25"
               >
                 <Sparkles className="w-5 h-5 mr-2" />
                 Connect Wallet

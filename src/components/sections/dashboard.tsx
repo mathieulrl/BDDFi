@@ -9,13 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { HealthFactorGauge } from "@/components/ui/progress";
-import { useAccount, useBalance, useChainId } from "wagmi";
+import { useAccount, useBalance, useChainId, useSendTransaction, useReadContracts } from "wagmi";
+import { formatUnits } from "viem";
 import { 
   ConnectWallet, 
   Wallet,
 } from "@coinbase/onchainkit/wallet";
 import {
-  Address,
+  Address as OnchainAddress,
   Avatar,
   Name,
   Identity,
@@ -41,36 +42,12 @@ import {
   Check,
 } from "lucide-react";
 import { cn, formatCurrency, formatNumber, calculateHealthFactor, shortenAddress } from "@/lib/utils";
-import { useUserAccountData } from "@/hooks/useAave";
+import { useUserAccountData, useApprove, useSupply } from "@/hooks/useAave";
+import { useOnchainKitSwap } from "@/hooks/useOnchainKitSwap";
 import { usePrices } from "@/hooks/usePrices";
 import { getContracts } from "@/lib/contracts";
 
-const cryptoAssets = [
-  { 
-    symbol: "BTC", 
-    name: "Bitcoin (cbBTC)", 
-    icon: "₿",
-    color: "#F7931A",
-    allocation: 40,
-    apy: 0.5,
-  },
-  { 
-    symbol: "ETH", 
-    name: "Ethereum", 
-    icon: "Ξ",
-    color: "#627EEA",
-    allocation: 40,
-    apy: 2.1,
-  },
-  { 
-    symbol: "SOL", 
-    name: "Solana", 
-    icon: "◎",
-    color: "#14F195",
-    allocation: 20,
-    apy: 3.5,
-  },
-];
+// cryptoAssets is now defined inside DashboardSection component based on network
 
 const dcaFrequencies = [
   { value: "daily", label: "Daily" },
@@ -83,9 +60,10 @@ const dcaFrequencies = [
 interface AssetAllocationProps {
   allocations: number[];
   onAllocationsChange: (allocations: number[]) => void;
-  prices: { BTC: number; ETH: number; SOL: number };
+  prices: { BTC: number; ETH: number };
   editable?: boolean;
   depositAmount?: string;
+  cryptoAssets: Array<{ symbol: string; name: string; icon: string; color: string; allocation: number; apy: number }>;
 }
 
 function AssetAllocation({ 
@@ -93,7 +71,8 @@ function AssetAllocation({
   onAllocationsChange, 
   prices, 
   editable = true,
-  depositAmount 
+  depositAmount,
+  cryptoAssets
 }: AssetAllocationProps) {
   const total = allocations.reduce((a, b) => a + b, 0);
   const isValid = total === 100;
@@ -193,11 +172,32 @@ export function DashboardSection() {
   const { isConnected, address } = useAccount();
   const chainId = useChainId();
   const { getPrice } = usePrices();
+  const isMainnet = chainId === 8453; // Base Mainnet
   
   // Prevent hydration mismatch
   useEffect(() => {
     setMounted(true);
   }, []);
+  
+  // Update crypto assets based on network
+  const cryptoAssets = [
+    { 
+      symbol: "BTC", 
+      name: isMainnet ? "Coinbase Wrapped BTC (cbBTC)" : "Wrapped Bitcoin (WBTC)", 
+      icon: "₿",
+      color: "#F7931A",
+      allocation: 50,
+      apy: 0.5,
+    },
+    { 
+      symbol: "ETH", 
+      name: "Coinbase Wrapped ETH (cbETH)", 
+      icon: "Ξ",
+      color: "#627EEA",
+      allocation: 50,
+      apy: 2.1,
+    },
+  ];
   
   // Get contracts for current chain (default to baseSepolia for SSR)
   const contracts = getContracts(mounted ? chainId : 84532);
@@ -210,6 +210,11 @@ export function DashboardSection() {
     address: address,
     token: contracts.USDC,
   });
+  // OnchainKit swap + Aave deposit helpers
+  const { getSwapTransaction } = useOnchainKitSwap();
+  const { sendTransactionAsync, isPending: isSendingTx } = useSendTransaction();
+  const { approve } = useApprove();
+  const { supply } = useSupply();
   
   // Local state
   const [depositAmount, setDepositAmount] = useState("");
@@ -217,16 +222,42 @@ export function DashboardSection() {
   const [dcaAmount, setDcaAmount] = useState("500");
   const [dcaFrequency, setDcaFrequency] = useState("weekly");
   const [ltv, setLtv] = useState([50]);
-  const [dcaAllocations, setDcaAllocations] = useState([40, 40, 20]);
-  const [quickDepositAllocations, setQuickDepositAllocations] = useState([40, 40, 20]);
+  const [dcaAllocations, setDcaAllocations] = useState([50, 50]);
+  const [quickDepositAllocations, setQuickDepositAllocations] = useState([50, 50]);
   const [copied, setCopied] = useState(false);
   const [isDCAActive, setIsDCAActive] = useState(false);
+  const [isSwapping, setIsSwapping] = useState(false);
+
+  // Read cbBTC / WBTC and cbETH balances for deposit step (uses current chain)
+  const tokenAddressesForBalances = [
+    isMainnet ? (contracts as any).cbBTC : (contracts as any).WBTC,
+    (contracts as any).cbETH,
+  ].filter(Boolean) as `0x${string}`[];
+
+  const { data: tokenBalances } = useReadContracts({
+    contracts: tokenAddressesForBalances.map((addr) => ({
+      address: addr,
+      abi: [
+        {
+          name: "balanceOf",
+          type: "function",
+          stateMutability: "view",
+          inputs: [{ name: "account", type: "address" }],
+          outputs: [{ name: "balance", type: "uint256" }],
+        },
+      ] as const,
+      functionName: "balanceOf",
+      args: [address || "0x0000000000000000000000000000000000000000"],
+    })),
+    query: {
+      enabled: !!address,
+    },
+  });
 
   // Get prices
   const btcPrice = getPrice("BTC") || 67500;
   const ethPrice = getPrice("ETH") || 3450;
-  const solPrice = getPrice("SOL") || 185;
-  const prices = { BTC: btcPrice, ETH: ethPrice, SOL: solPrice };
+  const prices = { BTC: btcPrice, ETH: ethPrice };
 
   // Calculate values from AAVE data or use mock
   const totalDeposited = aaveData?.totalCollateralUSD || 0;
@@ -246,6 +277,157 @@ export function DashboardSection() {
 
   // Format USDC balance
   const usdcBalanceFormatted = usdcBalance ? Number(usdcBalance.formatted).toFixed(2) : "0.00";
+
+  // STEP 1: Swaps only (OnchainKit, 1 tx par swap)
+  const handleSwapOnly = async () => {
+    if (!address || !depositAmount || parseFloat(depositAmount) <= 0) {
+      alert("Please enter a valid deposit amount");
+      return;
+    }
+
+    const totalAllocation = quickDepositAllocations.reduce((a, b) => a + b, 0);
+    if (totalAllocation !== 100) {
+      alert("Total allocation must equal 100%");
+      return;
+    }
+
+    setIsSwapping(true);
+    try {
+      const usdcAmount = parseFloat(depositAmount);
+      
+      // Check USDC balance
+      if (usdcAmount > Number(usdcBalanceFormatted)) {
+        alert(`Insufficient USDC balance. You have $${usdcBalanceFormatted}`);
+        setIsSwapping(false);
+        return;
+      }
+
+      console.log("Executing swaps only with OnchainKit...");
+
+      // For chaque asset (BTC / ETH), on exécute un swap OnchainKit séquentiel
+      const allocations = quickDepositAllocations;
+      const assets = ["BTC", "ETH"] as const;
+
+      for (let i = 0; i < assets.length; i++) {
+        const symbol = assets[i];
+        const allocation = allocations[i];
+        if (allocation === 0) continue;
+
+        const usdcForAsset = (usdcAmount * allocation) / 100;
+        const usdcForAssetWei = BigInt(Math.round(usdcForAsset * 1000000)); // USDC 6 décimales
+
+        const tokenOut =
+          symbol === "BTC"
+            ? (isMainnet ? (contracts as any).cbBTC : (contracts as any).WBTC)
+            : (contracts as any).cbETH;
+
+        if (!tokenOut) continue;
+
+        const swapTx = await getSwapTransaction(
+          address,
+          contracts.USDC,
+          tokenOut,
+          usdcForAssetWei,
+          "USDC",
+          symbol === "BTC" ? (isMainnet ? "cbBTC" : "WBTC") : "cbETH"
+        );
+        
+        // If OnchainKit returns an approveTransaction for USDC, send it first
+        const approveTx: any = swapTx.approveTransaction;
+        if (approveTx && approveTx.to && approveTx.data) {
+          console.log("Sending approve transaction from OnchainKit swap quote...", {
+            to: approveTx.to,
+            value: approveTx.value,
+          });
+          await sendTransactionAsync({
+            to: approveTx.to as `0x${string}`,
+            data: approveTx.data as `0x${string}`,
+            value: BigInt(approveTx.value || 0),
+          });
+        }
+
+        // Then send the actual swap transaction
+        await sendTransactionAsync({
+          to: swapTx.to,
+          data: swapTx.data,
+          value: swapTx.value,
+        });
+      }
+
+      alert(
+        `✅ Swaps submitted!\n\nÉtape 1/2 terminée :\n- USDC → cbBTC\n- USDC → cbETH\n\nPasse ensuite à l'étape 2 : Deposit to Aave.`
+      );
+    } catch (error: any) {
+      console.error("Error in swaps:", error);
+      alert(`Error: ${error.message || "Transaction failed. Please try again."}`);
+    } finally {
+      setIsSwapping(false);
+    }
+  };
+
+  // STEP 2: Deposit only (Aave, lit les soldes réels)
+  const handleDepositOnly = async () => {
+    if (!address) {
+      alert("Connect your wallet first");
+      return;
+    }
+
+    // tokenBalances suit l'ordre tokenAddressesForBalances: [cbBTC/WBTC, cbETH]
+    const balances = (tokenBalances || []).map((r) =>
+      r && r.status === "success" ? (r.result as bigint) : BigInt(0)
+    );
+
+    const tokensForDeposit: { symbol: "BTC" | "ETH"; address: `0x${string}`; balance: bigint }[] = [];
+
+    if (balances[0] && balances[0] > BigInt(0)) {
+      tokensForDeposit.push({
+        symbol: "BTC",
+        address: tokenAddressesForBalances[0],
+        balance: balances[0],
+      });
+    }
+    if (balances[1] && balances[1] > BigInt(0)) {
+      tokensForDeposit.push({
+        symbol: "ETH",
+        address: tokenAddressesForBalances[1],
+        balance: balances[1],
+      });
+    }
+
+    if (tokensForDeposit.length === 0) {
+      alert("No cbBTC / cbETH balance found to deposit. Run the swaps first.");
+      return;
+    }
+
+    setIsSwapping(true);
+    try {
+      for (const token of tokensForDeposit) {
+        // Use 95% of the on-chain balance to avoid dust/rounding issues
+        const conservativeBalance = (token.balance * BigInt(95)) / BigInt(100);
+        if (conservativeBalance <= BigInt(0)) continue;
+
+        console.log("Depositing to Aave with conservative balance", {
+          symbol: token.symbol,
+          fullBalance: token.balance.toString(),
+          conservativeBalance: conservativeBalance.toString(),
+        });
+
+        // 1) Approve Aave Pool for the conservative amount
+        await approve(token.address, conservativeBalance);
+        // 2) Supply conservative amount
+        await supply(token.address, conservativeBalance);
+      }
+
+      alert(
+        `✅ Deposits submitted!\n\nÉtape 2/2 : toutes les positions cbBTC / cbETH détectées ont été déposées sur Aave.`
+      );
+    } catch (error: any) {
+      console.error("Error in deposits:", error);
+      alert(`Error: ${error.message || "Deposit transaction failed. Please try again."}`);
+    } finally {
+      setIsSwapping(false);
+    }
+  };
 
   // Show loading state until mounted to prevent hydration mismatch
   if (!mounted) {
@@ -387,7 +569,7 @@ export function DashboardSection() {
           <StatsCard
             label="Available to Borrow"
             value={formatCurrency(availableToBorrow)}
-            icon={<BarChart3 className="w-5 h-5 text-solana" />}
+            icon={<BarChart3 className="w-5 h-5 text-ethereum" />}
             subValue="at current LTV"
           />
         </motion.div>
@@ -506,6 +688,7 @@ export function DashboardSection() {
                       onAllocationsChange={setDcaAllocations}
                       prices={prices}
                       editable={true}
+                      cryptoAssets={cryptoAssets}
                     />
 
                     <Button 
@@ -575,17 +758,55 @@ export function DashboardSection() {
                         prices={prices}
                         editable={true}
                         depositAmount={depositAmount}
+                        cryptoAssets={cryptoAssets}
                       />
                     </div>
 
-                    <Button 
-                      variant="gradient" 
-                      className="w-full" 
-                      disabled={!depositAmount || parseFloat(depositAmount) <= 0}
-                    >
-                      <Coins className="w-4 h-4" />
-                      Deposit & Convert
-                    </Button>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <Button 
+                        variant="gradient" 
+                        className="w-full" 
+                        disabled={
+                          !depositAmount || 
+                          parseFloat(depositAmount) <= 0 || 
+                          quickDepositAllocations.reduce((a, b) => a + b, 0) !== 100 ||
+                          isSwapping ||
+                          isSendingTx
+                        }
+                        onClick={handleSwapOnly}
+                      >
+                        {isSwapping && isSendingTx ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Swapping...
+                          </>
+                        ) : (
+                          <>
+                            <ArrowDownUp className="w-4 h-4" />
+                            1. Swap USDC → cbBTC / cbETH
+                          </>
+                        )}
+                      </Button>
+
+                      <Button 
+                        variant="outline" 
+                        className="w-full" 
+                        disabled={isSwapping || !address}
+                        onClick={handleDepositOnly}
+                      >
+                        {isSwapping ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Depositing...
+                          </>
+                        ) : (
+                          <>
+                            <Landmark className="w-4 h-4" />
+                            2. Deposit to Aave
+                          </>
+                        )}
+                      </Button>
+                    </div>
                     
                     {Number(usdcBalanceFormatted) === 0 && (
                       <p className="text-xs text-center text-muted-foreground">
@@ -749,7 +970,7 @@ export function DashboardSection() {
                 <GlassCard>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Clock className="w-5 h-5 text-solana" />
+                      <Clock className="w-5 h-5 text-ethereum" />
                       Active Position
                     </CardTitle>
                   </CardHeader>
@@ -859,52 +1080,141 @@ export function DashboardSection() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {totalDeposited === 0 ? (
-                      <div className="text-center py-8">
-                        <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-4">
-                          <BarChart3 className="w-8 h-8 text-muted-foreground" />
-                        </div>
-                        <h4 className="font-display font-semibold mb-2">No Holdings Yet</h4>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Start by depositing USDC and converting to crypto assets.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {cryptoAssets.map((asset) => {
-                          const value = totalDeposited * asset.allocation / 100;
-                          const price = prices[asset.symbol as keyof typeof prices] || 1;
-                          const amount = value / price;
-                          return (
+                    {(() => {
+                      // Wallet balances: USDC, cbBTC/WBTC, cbETH
+                      const usdcWallet = usdcBalance ? Number(usdcBalance.formatted) : 0;
+                      const cbBtcBalance =
+                        tokenBalances && tokenBalances[0] && tokenBalances[0].status === "success"
+                          ? (tokenBalances[0].result as bigint)
+                          : BigInt(0);
+                      const cbEthBalance =
+                        tokenBalances && tokenBalances[1] && tokenBalances[1].status === "success"
+                          ? (tokenBalances[1].result as bigint)
+                          : BigInt(0);
+
+                      const hasAnyHolding =
+                        usdcWallet > 0 || cbBtcBalance > BigInt(0) || cbEthBalance > BigInt(0) || totalDeposited > 0;
+
+                      if (!hasAnyHolding) {
+                        return (
+                          <div className="text-center py-8">
+                            <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-4">
+                              <BarChart3 className="w-8 h-8 text-muted-foreground" />
+                            </div>
+                            <h4 className="font-display font-semibold mb-2">No Holdings Yet</h4>
+                            <p className="text-sm text-muted-foreground mb-4">
+                              Swap USDC to cbBTC / cbETH or deposit to Aave to see your portfolio here.
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      const rows: Array<{
+                        key: string;
+                        name: string;
+                        symbol: string;
+                        icon: string;
+                        color: string;
+                        amount: number;
+                        value: number;
+                      }> = [];
+
+                      // USDC (wallet)
+                      if (usdcWallet > 0) {
+                        rows.push({
+                          key: "USDC",
+                          name: "USDC",
+                          symbol: "USDC",
+                          icon: "$",
+                          color: "#2775CA",
+                          amount: usdcWallet,
+                          value: usdcWallet,
+                        });
+                      }
+
+                      // cbBTC / WBTC (wallet)
+                      if (cbBtcBalance > BigInt(0)) {
+                        const btcDecimals = isMainnet ? 8 : 8;
+                        const btcAmount = Number(formatUnits(cbBtcBalance, btcDecimals));
+                        const btcPriceNow = prices.BTC || 0;
+                        rows.push({
+                          key: "BTC",
+                          name: isMainnet ? "Coinbase Wrapped BTC (cbBTC)" : "Wrapped Bitcoin (WBTC)",
+                          symbol: "BTC",
+                          icon: "₿",
+                          color: "#F7931A",
+                          amount: btcAmount,
+                          value: btcAmount * btcPriceNow,
+                        });
+                      }
+
+                      // cbETH (wallet)
+                      if (cbEthBalance > BigInt(0)) {
+                        const ethAmount = Number(formatUnits(cbEthBalance, 18));
+                        const ethPriceNow = prices.ETH || 0;
+                        rows.push({
+                          key: "ETH",
+                          name: "Coinbase Wrapped ETH (cbETH)",
+                          symbol: "ETH",
+                          icon: "Ξ",
+                          color: "#627EEA",
+                          amount: ethAmount,
+                          value: ethAmount * ethPriceNow,
+                        });
+                      }
+
+                      // Aave total deposited as a synthetic "Aave Collateral" row
+                      if (totalDeposited > 0) {
+                        rows.push({
+                          key: "AAVE_COLLATERAL",
+                          name: "Aave Collateral (all markets)",
+                          symbol: "AAVE V3",
+                          icon: "ⓐ",
+                          color: "#B6509E",
+                          amount: totalDeposited,
+                          value: totalDeposited,
+                        });
+                      }
+
+                      return (
+                        <div className="space-y-4">
+                          {rows.map((row) => (
                             <div
-                              key={asset.symbol}
+                              key={row.key}
                               className="flex items-center justify-between p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
                             >
                               <div className="flex items-center gap-4">
                                 <div
                                   className="w-12 h-12 rounded-xl flex items-center justify-center text-xl font-bold"
-                                  style={{ backgroundColor: `${asset.color}20`, color: asset.color }}
+                                  style={{ backgroundColor: `${row.color}20`, color: row.color }}
                                 >
-                                  {asset.icon}
+                                  {row.icon}
                                 </div>
                                 <div>
-                                  <h4 className="font-display font-semibold">{asset.name}</h4>
+                                  <h4 className="font-display font-semibold">{row.name}</h4>
                                   <p className="text-sm text-muted-foreground">
-                                    {amount.toFixed(6)} {asset.symbol}
+                                    {row.amount.toFixed(6)} {row.symbol}
                                   </p>
                                 </div>
                               </div>
                               <div className="text-right">
-                                <p className="font-display font-semibold">{formatCurrency(value)}</p>
-                                <p className="text-sm text-muted-foreground">
-                                  @ ${formatNumber(price)}
+                                <p className="font-display font-semibold">
+                                  {formatCurrency(row.value)}
                                 </p>
+                                {(row.symbol === "BTC" || row.symbol === "ETH") && (
+                                  <p className="text-sm text-muted-foreground">
+                                    @ $
+                                    {formatNumber(
+                                      row.symbol === "BTC" ? prices.BTC || 0 : prices.ETH || 0
+                                    )}
+                                  </p>
+                                )}
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </CardContent>
                 </GlassCard>
 

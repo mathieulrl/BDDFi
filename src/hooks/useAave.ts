@@ -320,7 +320,7 @@ export function useWithdraw() {
   return { withdraw, isPending, isConfirming, isSuccess, error, reset, hash };
 }
 
-// Hook to approve token spending
+// Hook to approve token spending for Aave
 export function useApprove() {
   const chainId = useChainId();
   const contracts = getContracts(chainId);
@@ -347,6 +347,35 @@ export function useApprove() {
       });
     },
     [contracts, writeContract]
+  );
+
+  return { approve, isPending, isConfirming, isSuccess, error, reset, hash };
+}
+
+// Hook to approve token spending for any spender (generic)
+export function useApproveToken() {
+  const { 
+    writeContract, 
+    data: hash, 
+    isPending,
+    error,
+    reset,
+  } = useWriteContract();
+
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash,
+  });
+
+  const approve = useCallback(
+    async (tokenAddress: Address, spenderAddress: Address, amount: bigint) => {
+      await writeContract({
+        address: tokenAddress,
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [spenderAddress, amount],
+      });
+    },
+    [writeContract]
   );
 
   return { approve, isPending, isConfirming, isSuccess, error, reset, hash };

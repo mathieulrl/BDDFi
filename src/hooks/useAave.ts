@@ -256,15 +256,12 @@ export function useRepay() {
 
       try {
         // Interest rate mode: 2 = variable rate
-        // Simplified: direct call without extra complexity
-        const result = await writeContract({
+        await writeContract({
           address: contracts.AAVE_POOL,
           abi: AAVE_POOL_ABI,
           functionName: "repay",
           args: [assetAddress, amount, BigInt(2), address],
         });
-        // Don't await result - let wagmi handle it
-        return result;
       } catch (err) {
         updateTransactionStatus(txId, "failed");
         throw err;

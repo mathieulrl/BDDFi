@@ -259,21 +259,20 @@ export function DashboardSection() {
     },
   });
 
-  // Aave USDC variable debt (exact on-chain debt amount)
-  const { data: usdcReserveData, refetch: refetchUsdcReserveData } = useUserReserveData(contracts.USDC as `0x${string}`);
+  // Aave USDC variable debt
+  const { data: usdcReserveData } = useUserReserveData(contracts.USDC as `0x${string}`);
   const usdcVariableDebt: bigint =
     usdcReserveData && Array.isArray(usdcReserveData) && usdcReserveData.length > 2
-      ? (usdcReserveData[2] as bigint) // currentVariableDebt
+      ? (usdcReserveData[2] as bigint)
       : BigInt(0);
 
-  // Current USDC allowance for the Aave Pool (used for 2-step approve → repay flow)
+  // USDC allowance for Aave Pool (2-step approve → repay flow)
   const { allowance: usdcAllowanceRaw, refetch: refetchAllowance } = useAllowance(contracts.USDC as `0x${string}`);
   const usdcAllowance = (usdcAllowanceRaw ?? BigInt(0)) as bigint;
 
   // Refetch allowance when approve is confirmed
   useEffect(() => {
     if (isApproveSuccess && approveHash) {
-      // Wait a bit for the chain to update, then refetch
       const timer = setTimeout(() => {
         refetchAllowance();
         setWaitingForApproveConfirmation(false);
@@ -306,18 +305,14 @@ export function DashboardSection() {
   // Format USDC balance
   const usdcBalanceFormatted = usdcBalance ? Number(usdcBalance.formatted).toFixed(2) : "0.00";
 
-  // Helper to compute repay amount: use exact debt or wallet balance, whichever is smaller
-  // Simplified to avoid complex calculations that might timeout Coinbase Wallet simulation
+  // Calculate repay amount: min of debt and wallet balance
   const getRepayAmountWei = () => {
     if (usdcVariableDebt <= BigInt(0)) return BigInt(0);
     
     const walletUsdc = usdcBalance ? Number(usdcBalance.formatted) : 0;
-    const walletUsdcWei =
-      walletUsdc > 0 ? BigInt(Math.floor(walletUsdc * 1_000_000)) : BigInt(0);
+    const walletUsdcWei = walletUsdc > 0 ? BigInt(Math.floor(walletUsdc * 1_000_000)) : BigInt(0);
 
     if (walletUsdcWei <= BigInt(0)) return BigInt(0);
-
-    // Simple: use min of debt and wallet balance (no buffer to keep it simple)
     return walletUsdcWei < usdcVariableDebt ? walletUsdcWei : usdcVariableDebt;
   };
 
@@ -1151,7 +1146,7 @@ export function DashboardSection() {
                                 alert("Connect your wallet first");
                                 return;
                               }
-                              // Pre-calculate everything before any async operations
+
                               const repayAmountWei = getRepayAmountWei();
                               if (repayAmountWei <= BigInt(0)) {
                                 alert("No repayable USDC amount found (check your wallet balance and Aave debt).");
@@ -1159,45 +1154,34 @@ export function DashboardSection() {
                               }
 
                               try {
-                                // 2-step flow on the same button:
-                                // 1) If allowance is insufficient, just approve
+                                // Step 1: Approve if needed
                                 if (!usdcAllowance || usdcAllowance < repayAmountWei) {
-                                  // If we're still waiting for a previous approve to confirm, don't do another one
                                   if (waitingForApproveConfirmation || isApprovePending || isApproveConfirming) {
                                     alert("Please wait for the previous approval to be confirmed.");
                                     return;
                                   }
                                   
-                                  // Approve with a bit more than needed to avoid future approves
-                                  const approveAmount = repayAmountWei * BigInt(2); // Approve 2x to be safe
+                                  const approveAmount = repayAmountWei * BigInt(2);
                                   setWaitingForApproveConfirmation(true);
                                   await approve(contracts.USDC as `0x${string}`, approveAmount);
-                                  alert("✅ Approval submitted. Please wait for confirmation, then click Repay again to execute the repayment.");
+                                  alert("✅ Approval submitted. Please wait for confirmation, then click Repay again.");
                                   return;
                                 }
 
-                                // If we're waiting for approve confirmation, don't proceed with repay yet
-                                if (waitingForApproveConfirmation || isApprovePending || isApproveConfirming) {
+                                // Step 2: Repay
+                                if (waitingForApproveConfirmation || isApprovePending || isApproveConfirming || isRepaying) {
                                   alert("Please wait for the approval to be confirmed before repaying.");
                                   return;
                                 }
 
-                                // 2) Prevent double-click / double execution
-                                if (isRepaying) {
-                                  return;
-                                }
                                 setIsRepaying(true);
 
                                 try {
-                                  // Ultra-simplified: use exact debt amount if wallet has enough, otherwise wallet balance
-                                  // No calculations, no buffers - just the simplest possible repay
                                   const walletUsdc = usdcBalance ? Number(usdcBalance.formatted) : 0;
                                   const walletUsdcWei = walletUsdc > 0 ? BigInt(Math.floor(walletUsdc * 1_000_000)) : BigInt(0);
-                                  
-                                  // Use exact debt if we have enough, otherwise partial repay
                                   const finalRepayAmount = walletUsdcWei >= usdcVariableDebt 
-                                    ? usdcVariableDebt  // Exact debt, no buffer
-                                    : walletUsdcWei;     // Partial repay
+                                    ? usdcVariableDebt 
+                                    : walletUsdcWei;
                                   
                                   if (finalRepayAmount <= BigInt(0)) {
                                     alert("No repayable amount found.");
@@ -1205,28 +1189,17 @@ export function DashboardSection() {
                                     return;
                                   }
 
-                                  console.log("Repaying:", {
-                                    amount: finalRepayAmount.toString(),
-                                    debt: usdcVariableDebt.toString(),
-                                    wallet: walletUsdcWei.toString(),
-                                  });
-
-                                  // Execute repay - simplest possible call
                                   await repay(contracts.USDC as `0x${string}`, finalRepayAmount);
                                   
-                                  // Refetch after a small delay to let the transaction settle
                                   setTimeout(async () => {
                                     await refetchAaveAccount();
                                   }, 1000);
                                   
                                   alert("✅ Repay transaction submitted.");
                                 } catch (err: any) {
-                                  console.error("Error in repay:", err);
-                                  // Reset flag on error so user can retry
                                   setIsRepaying(false);
-                                  throw err; // Re-throw to be caught by outer catch
+                                  throw err;
                                 } finally {
-                                  // Reset flag after a delay to allow transaction to be processed
                                   setTimeout(() => setIsRepaying(false), 2000);
                                 }
                               } catch (err: any) {

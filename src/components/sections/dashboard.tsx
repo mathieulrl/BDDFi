@@ -46,6 +46,7 @@ import { useUserAccountData, useUserReserveData, useApprove, useSupply, useBorro
 import { useOnchainKitSwap } from "@/hooks/useOnchainKitSwap";
 import { usePrices } from "@/hooks/usePrices";
 import { getContracts } from "@/lib/contracts";
+import { CoinbaseOnrampButton, CoinbaseOfframpButton } from "@/components/ui/coinbase-onramp-buttons";
 
 // cryptoAssets is now defined inside DashboardSection component based on network
 
@@ -661,7 +662,42 @@ export function DashboardSection() {
 
             {/* BUY TAB */}
             <TabsContent value="buy">
-              <div className="grid lg:grid-cols-2 gap-6">
+              <div className="space-y-6">
+                {/* Onramp/Offramp Section */}
+                <GlassCard>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <ArrowDownUp className="w-5 h-5 text-usdc" />
+                      Fiat ↔ USDC
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {!isConnected ? (
+                      <div className="text-center py-8">
+                        <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-4">
+                          <WalletIcon className="w-8 h-8 text-muted-foreground" />
+                        </div>
+                        <h4 className="font-display font-semibold mb-2">Connect Wallet</h4>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Connect your wallet to buy or sell USDC with fiat currency
+                        </p>
+                        <Wallet>
+                          <ConnectWallet className="!w-full !rounded-xl !py-3" />
+                        </Wallet>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <CoinbaseOnrampButton />
+                        <CoinbaseOfframpButton />
+                      </div>
+                    )}
+                    <p className="text-xs text-center text-muted-foreground">
+                      Powered by Coinbase • Buy and sell USDC directly to/from your wallet
+                    </p>
+                  </CardContent>
+                </GlassCard>
+
+                <div className="grid lg:grid-cols-2 gap-6">
                 {/* DCA Setup */}
                 <GlassCard>
                   <CardHeader>
@@ -869,6 +905,7 @@ export function DashboardSection() {
                     )}
                   </CardContent>
                 </GlassCard>
+                </div>
               </div>
             </TabsContent>
 

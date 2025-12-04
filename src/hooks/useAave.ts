@@ -238,6 +238,11 @@ export function useRepay() {
     async (assetAddress: Address, amount: bigint) => {
       if (!address) throw new Error("Wallet not connected");
 
+      // Prevent multiple simultaneous repay calls
+      if (isPending) {
+        throw new Error("A repay transaction is already in progress. Please wait.");
+      }
+
       // Add pending transaction
       const txId = `repay-${Date.now()}`;
       addTransaction({
@@ -251,18 +256,21 @@ export function useRepay() {
 
       try {
         // Interest rate mode: 2 = variable rate
-        await writeContract({
+        // Simplified: direct call without extra complexity
+        const result = await writeContract({
           address: contracts.AAVE_POOL,
           abi: AAVE_POOL_ABI,
           functionName: "repay",
           args: [assetAddress, amount, BigInt(2), address],
         });
+        // Don't await result - let wagmi handle it
+        return result;
       } catch (err) {
         updateTransactionStatus(txId, "failed");
         throw err;
       }
     },
-    [address, contracts, writeContract, addTransaction, updateTransactionStatus]
+    [address, contracts, writeContract, addTransaction, updateTransactionStatus, isPending]
   );
 
   return { repay, isPending, isConfirming, isSuccess, error, reset, hash };

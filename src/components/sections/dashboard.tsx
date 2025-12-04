@@ -42,7 +42,7 @@ import {
   Check,
 } from "lucide-react";
 import { cn, formatCurrency, formatNumber, calculateHealthFactor, shortenAddress } from "@/lib/utils";
-import { useUserAccountData, useApprove, useSupply, useBorrow } from "@/hooks/useAave";
+import { useUserAccountData, useUserReserveData, useApprove, useSupply, useBorrow, useRepay, useAllowance } from "@/hooks/useAave";
 import { useOnchainKitSwap } from "@/hooks/useOnchainKitSwap";
 import { usePrices } from "@/hooks/usePrices";
 import { getContracts } from "@/lib/contracts";
@@ -203,7 +203,7 @@ export function DashboardSection() {
   const contracts = getContracts(mounted ? chainId : 84532);
   
   // AAVE data
-  const { data: aaveData, isLoading: aaveLoading } = useUserAccountData();
+  const { data: aaveData, isLoading: aaveLoading, refetch: refetchAaveAccount } = useUserAccountData();
   
   // USDC Balance
   const { data: usdcBalance } = useBalance({
@@ -213,9 +213,10 @@ export function DashboardSection() {
   // OnchainKit swap + Aave deposit helpers
   const { getSwapTransaction } = useOnchainKitSwap();
   const { sendTransactionAsync, isPending: isSendingTx } = useSendTransaction();
-  const { approve } = useApprove();
+  const { approve, isPending: isApprovePending, isConfirming: isApproveConfirming, isSuccess: isApproveSuccess, hash: approveHash } = useApprove();
   const { supply } = useSupply();
   const { borrow, isPending: isBorrowPending, isConfirming: isBorrowConfirming } = useBorrow();
+  const { repay, isPending: isRepayPending, isConfirming: isRepayConfirming } = useRepay();
   
   // Local state
   const [depositAmount, setDepositAmount] = useState("");
@@ -228,6 +229,9 @@ export function DashboardSection() {
   const [copied, setCopied] = useState(false);
   const [isDCAActive, setIsDCAActive] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
+  const [activeTab, setActiveTab] = useState<"buy" | "borrow" | "portfolio">("buy");
+  const [waitingForApproveConfirmation, setWaitingForApproveConfirmation] = useState(false);
+  const [isRepaying, setIsRepaying] = useState(false);
 
   // Read cbBTC / WBTC and cbETH balances for deposit step (uses current chain)
   const tokenAddressesForBalances = [
@@ -255,6 +259,29 @@ export function DashboardSection() {
     },
   });
 
+  // Aave USDC variable debt (exact on-chain debt amount)
+  const { data: usdcReserveData, refetch: refetchUsdcReserveData } = useUserReserveData(contracts.USDC as `0x${string}`);
+  const usdcVariableDebt: bigint =
+    usdcReserveData && Array.isArray(usdcReserveData) && usdcReserveData.length > 2
+      ? (usdcReserveData[2] as bigint) // currentVariableDebt
+      : BigInt(0);
+
+  // Current USDC allowance for the Aave Pool (used for 2-step approve → repay flow)
+  const { allowance: usdcAllowanceRaw, refetch: refetchAllowance } = useAllowance(contracts.USDC as `0x${string}`);
+  const usdcAllowance = (usdcAllowanceRaw ?? BigInt(0)) as bigint;
+
+  // Refetch allowance when approve is confirmed
+  useEffect(() => {
+    if (isApproveSuccess && approveHash) {
+      // Wait a bit for the chain to update, then refetch
+      const timer = setTimeout(() => {
+        refetchAllowance();
+        setWaitingForApproveConfirmation(false);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [isApproveSuccess, approveHash, refetchAllowance]);
+
   // Get prices
   const btcPrice = getPrice("BTC") || 67500;
   const ethPrice = getPrice("ETH") || 3450;
@@ -278,6 +305,21 @@ export function DashboardSection() {
 
   // Format USDC balance
   const usdcBalanceFormatted = usdcBalance ? Number(usdcBalance.formatted).toFixed(2) : "0.00";
+
+  // Helper to compute repay amount: use exact debt or wallet balance, whichever is smaller
+  // Simplified to avoid complex calculations that might timeout Coinbase Wallet simulation
+  const getRepayAmountWei = () => {
+    if (usdcVariableDebt <= BigInt(0)) return BigInt(0);
+    
+    const walletUsdc = usdcBalance ? Number(usdcBalance.formatted) : 0;
+    const walletUsdcWei =
+      walletUsdc > 0 ? BigInt(Math.floor(walletUsdc * 1_000_000)) : BigInt(0);
+
+    if (walletUsdcWei <= BigInt(0)) return BigInt(0);
+
+    // Simple: use min of debt and wallet balance (no buffer to keep it simple)
+    return walletUsdcWei < usdcVariableDebt ? walletUsdcWei : usdcVariableDebt;
+  };
 
   // Helper to get target borrow amount in USD from state (respecting LTV slider)
   const getTargetBorrowAmount = () => {
@@ -606,7 +648,7 @@ export function DashboardSection() {
           animate={isInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.5, delay: 0.2 }}
         >
-          <Tabs defaultValue="buy" className="space-y-6">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="space-y-6">
             <TabsList className="grid grid-cols-3 w-full max-w-md mx-auto">
               <TabsTrigger value="buy" className="gap-2">
                 <Coins className="w-4 h-4" />
@@ -856,10 +898,10 @@ export function DashboardSection() {
                         <p className="text-sm text-muted-foreground mb-4">
                           Deposit crypto first to use as collateral for borrowing USDC.
                         </p>
-                        <Button variant="outline" onClick={() => {
-                          const buyTab = document.querySelector('[data-state="inactive"][value="buy"]') as HTMLElement;
-                          buyTab?.click();
-                        }}>
+                        <Button
+                          variant="outline"
+                          onClick={() => setActiveTab("buy")}
+                        >
                           Go to Deposit
                         </Button>
                       </div>
@@ -1092,11 +1134,134 @@ export function DashboardSection() {
 
                         {/* Quick Actions */}
                         <div className="grid grid-cols-2 gap-3">
-                          <Button variant="outline" className="w-full">
-                            <ArrowUpRight className="w-4 h-4" />
-                            Repay
+                          <Button
+                            variant="outline"
+                            className="w-full"
+                            disabled={
+                              isRepayPending ||
+                              isRepayConfirming ||
+                              isApprovePending ||
+                              isApproveConfirming ||
+                              waitingForApproveConfirmation ||
+                              isRepaying ||
+                              getRepayAmountWei() <= BigInt(0)
+                            }
+                            onClick={async () => {
+                              if (!address) {
+                                alert("Connect your wallet first");
+                                return;
+                              }
+                              // Pre-calculate everything before any async operations
+                              const repayAmountWei = getRepayAmountWei();
+                              if (repayAmountWei <= BigInt(0)) {
+                                alert("No repayable USDC amount found (check your wallet balance and Aave debt).");
+                                return;
+                              }
+
+                              try {
+                                // 2-step flow on the same button:
+                                // 1) If allowance is insufficient, just approve
+                                if (!usdcAllowance || usdcAllowance < repayAmountWei) {
+                                  // If we're still waiting for a previous approve to confirm, don't do another one
+                                  if (waitingForApproveConfirmation || isApprovePending || isApproveConfirming) {
+                                    alert("Please wait for the previous approval to be confirmed.");
+                                    return;
+                                  }
+                                  
+                                  // Approve with a bit more than needed to avoid future approves
+                                  const approveAmount = repayAmountWei * BigInt(2); // Approve 2x to be safe
+                                  setWaitingForApproveConfirmation(true);
+                                  await approve(contracts.USDC as `0x${string}`, approveAmount);
+                                  alert("✅ Approval submitted. Please wait for confirmation, then click Repay again to execute the repayment.");
+                                  return;
+                                }
+
+                                // If we're waiting for approve confirmation, don't proceed with repay yet
+                                if (waitingForApproveConfirmation || isApprovePending || isApproveConfirming) {
+                                  alert("Please wait for the approval to be confirmed before repaying.");
+                                  return;
+                                }
+
+                                // 2) Prevent double-click / double execution
+                                if (isRepaying) {
+                                  return;
+                                }
+                                setIsRepaying(true);
+
+                                try {
+                                  // Ultra-simplified: use exact debt amount if wallet has enough, otherwise wallet balance
+                                  // No calculations, no buffers - just the simplest possible repay
+                                  const walletUsdc = usdcBalance ? Number(usdcBalance.formatted) : 0;
+                                  const walletUsdcWei = walletUsdc > 0 ? BigInt(Math.floor(walletUsdc * 1_000_000)) : BigInt(0);
+                                  
+                                  // Use exact debt if we have enough, otherwise partial repay
+                                  const finalRepayAmount = walletUsdcWei >= usdcVariableDebt 
+                                    ? usdcVariableDebt  // Exact debt, no buffer
+                                    : walletUsdcWei;     // Partial repay
+                                  
+                                  if (finalRepayAmount <= BigInt(0)) {
+                                    alert("No repayable amount found.");
+                                    setIsRepaying(false);
+                                    return;
+                                  }
+
+                                  console.log("Repaying:", {
+                                    amount: finalRepayAmount.toString(),
+                                    debt: usdcVariableDebt.toString(),
+                                    wallet: walletUsdcWei.toString(),
+                                  });
+
+                                  // Execute repay - simplest possible call
+                                  await repay(contracts.USDC as `0x${string}`, finalRepayAmount);
+                                  
+                                  // Refetch after a small delay to let the transaction settle
+                                  setTimeout(async () => {
+                                    await refetchAaveAccount();
+                                  }, 1000);
+                                  
+                                  alert("✅ Repay transaction submitted.");
+                                } catch (err: any) {
+                                  console.error("Error in repay:", err);
+                                  // Reset flag on error so user can retry
+                                  setIsRepaying(false);
+                                  throw err; // Re-throw to be caught by outer catch
+                                } finally {
+                                  // Reset flag after a delay to allow transaction to be processed
+                                  setTimeout(() => setIsRepaying(false), 2000);
+                                }
+                              } catch (err: any) {
+                                console.error("Error repaying USDC:", err);
+                                alert(`Error repaying USDC: ${err.message || "Transaction failed."}`);
+                              }
+                            }}
+                          >
+                            {isRepayPending || isRepayConfirming ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Repaying...
+                              </>
+                            ) : isApprovePending || isApproveConfirming || waitingForApproveConfirmation ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                {waitingForApproveConfirmation && !isApprovePending && !isApproveConfirming
+                                  ? "Waiting for approval..."
+                                  : "Approving..."}
+                              </>
+                            ) : (
+                              <>
+                                <ArrowUpRight className="w-4 h-4" />
+                                {!usdcAllowance || usdcAllowance < getRepayAmountWei()
+                                  ? "Approve USDC"
+                                  : "Repay"}
+                              </>
+                            )}
                           </Button>
-                          <Button variant="outline" className="w-full">
+
+                          <Button
+                            variant="outline"
+                            className="w-full"
+                            onClick={() => setActiveTab("buy")}
+                          >
                             <TrendingUp className="w-4 h-4" />
                             Add Collateral
                           </Button>

@@ -89,26 +89,26 @@ export function useOnchainKitSwap() {
           useAggregator: true, // Use aggregator for best routes
         });
 
+        // Check if response is an error
+        if ('error' in response || 'message' in response) {
+          const errorMessage = (response as any).error?.message || (response as any).message || "Swap transaction build failed";
+          console.error(`OnchainKit API error:`, response);
+          throw new Error(errorMessage);
+        }
+
+        // Type guard: response should have transaction property
+        if (!('transaction' in response) || !response.transaction) {
+          const errorMessage = (response as any).warning?.message || (response as any).warning?.description || "No transaction returned from buildSwapTransaction";
+          console.error(`No transaction in response:`, response);
+          throw new Error(errorMessage);
+        }
+
         console.log(`OnchainKit API response:`, {
           hasTransaction: !!response.transaction,
           hasApproveTransaction: !!response.approveTransaction,
           hasQuote: !!response.quote,
           hasWarning: !!response.warning,
-          warning: response.warning,
-          quote: response.quote,
-          fullResponse: response,
         });
-
-        if (!response.transaction) {
-          // Log the full response to understand what went wrong
-          const errorMessage = response.warning?.message || response.warning?.description || "No transaction returned from buildSwapTransaction";
-          console.error(`No transaction in response:`, {
-            warning: response.warning,
-            quote: response.quote,
-            fullResponse: response,
-          });
-          throw new Error(errorMessage);
-        }
 
         return {
           to: response.transaction.to as Address,

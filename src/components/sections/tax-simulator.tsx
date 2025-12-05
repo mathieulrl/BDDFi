@@ -9,10 +9,12 @@ import {
   calculateTax, 
   getIncomeBand, 
   getIncomeRangeDisplay,
+  ALL_US_STATES,
   type FilingStatus, 
   type IncomeBand, 
   type HoldingPeriod,
   type TaxCalculationResult,
+  type USState,
 } from "@/lib/tax-calculator";
 import { 
   Calculator, 
@@ -80,7 +82,7 @@ function ResultCard({ result }: { result: TaxCalculationResult }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="p-4 rounded-xl bg-white/5">
           <div className="text-xs text-muted-foreground mb-1">Federal Rate</div>
           <div className="text-2xl font-bold">
@@ -93,16 +95,27 @@ function ResultCard({ result }: { result: TaxCalculationResult }) {
             {result.niitApplies ? `${result.niit}%` : "0%"}
           </div>
         </div>
+        <div className="p-4 rounded-xl bg-white/5">
+          <div className="text-xs text-muted-foreground mb-1">State Rate</div>
+          <div className="text-2xl font-bold">
+            {result.stateRate > 0 ? `${result.stateRate}%` : "0%"}
+          </div>
+        </div>
       </div>
 
       <div className="p-4 rounded-xl bg-white/10 mb-6">
-        <div className="text-xs text-muted-foreground mb-2">Effective Federal Rate</div>
+        <div className="text-xs text-muted-foreground mb-2">Effective Total Rate (Federal + NIIT + State)</div>
         <div className="text-3xl font-bold mb-2">
-          {result.effectiveFederalRate.toFixed(1)}%
+          {result.effectiveTotalRate.toFixed(2)}%
         </div>
         {result.federalRateRange && (
           <div className="text-sm text-muted-foreground">
-            (Approximate: {result.federalRateRange} + {result.niit}% NIIT)
+            (Federal: {result.federalRateRange} + NIIT: {result.niit}% + State: {result.stateRate}%)
+          </div>
+        )}
+        {!result.federalRateRange && (
+          <div className="text-sm text-muted-foreground">
+            (Federal: {result.federalRate}% + NIIT: {result.niit}% + State: {result.stateRate}%)
           </div>
         )}
       </div>
@@ -133,6 +146,7 @@ export function TaxSimulatorSection() {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
+  const [state, setState] = useState<USState | "">("");
   const [filingStatus, setFilingStatus] = useState<FilingStatus | "">("");
   const [magi, setMagi] = useState("");
   const [holdingPeriod, setHoldingPeriod] = useState<HoldingPeriod | "">("");
@@ -146,19 +160,19 @@ export function TaxSimulatorSection() {
   };
 
   const handleCalculate = () => {
-    if (!filingStatus || !magi || !holdingPeriod) return;
+    if (!state || !filingStatus || !magi || !holdingPeriod) return;
 
     const magiNum = parseFloat(magi.replace(/[^0-9.]/g, ""));
     if (isNaN(magiNum)) return;
 
     const incomeBand = getIncomeBand(magiNum, filingStatus);
-    const calculation = calculateTax(filingStatus, incomeBand, holdingPeriod);
+    const calculation = calculateTax(filingStatus, incomeBand, holdingPeriod, state);
     
     setResult(calculation);
     setShowResult(true);
   };
 
-  const canCalculate = filingStatus && magi && holdingPeriod && !isNaN(parseFloat(magi.replace(/[^0-9.]/g, "")));
+  const canCalculate = state && filingStatus && magi && holdingPeriod && !isNaN(parseFloat(magi.replace(/[^0-9.]/g, "")));
 
   return (
     <section id="tax-simulator" className="relative py-32 px-6" ref={ref}>
@@ -197,11 +211,39 @@ export function TaxSimulatorSection() {
               </div>
 
               <div className="space-y-8">
-                {/* Question 1: Filing Status */}
+                {/* Question 0: State of Residence */}
                 <div>
                   <label className="block text-sm font-semibold mb-3">
-                    Q1. What is your filing status for your U.S. federal tax return?
+                    Q0. In which U.S. state are you a tax resident for state income tax purposes?
                   </label>
+                  <select
+                    value={state}
+                    onChange={(e) => {
+                      setState(e.target.value as USState);
+                      setResult(null);
+                      setShowResult(false);
+                    }}
+                    className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 focus:border-bitcoin focus:outline-none"
+                  >
+                    <option value="">Select your state...</option>
+                    {ALL_US_STATES.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Question 1: Filing Status */}
+                {state && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <label className="block text-sm font-semibold mb-3">
+                      Q1. What is your filing status for your U.S. federal tax return?
+                    </label>
                   <div className="space-y-2">
                     {FILING_STATUSES.map((status) => (
                       <button
@@ -223,10 +265,11 @@ export function TaxSimulatorSection() {
                       </button>
                     ))}
                   </div>
-                </div>
+                  </motion.div>
+                )}
 
                 {/* Question 2: MAGI */}
-                {filingStatus && (
+                {state && filingStatus && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -262,7 +305,7 @@ export function TaxSimulatorSection() {
                 )}
 
                 {/* Question 3: Holding Period */}
-                {filingStatus && magi && (
+                {state && filingStatus && magi && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}

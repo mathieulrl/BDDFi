@@ -6,6 +6,7 @@ import { HeroSection } from "@/components/sections/hero";
 import { HowItWorksSection } from "@/components/sections/how-it-works";
 import { MacroEconomicSection } from "@/components/sections/macro-economic";
 import { TaxSimulatorSection } from "@/components/sections/tax-simulator";
+import { PnLSimulatorSection } from "@/components/sections/pnl-simulator";
 import { DashboardSection } from "@/components/sections/dashboard";
 import { Footer } from "@/components/layout/footer";
 
@@ -33,6 +34,7 @@ export default function Home() {
         <HowItWorksSection />
         <MacroEconomicSection />
         <TaxSimulatorSection />
+        <PnLSimulatorSection />
         <DashboardSection />
       </motion.div>
 

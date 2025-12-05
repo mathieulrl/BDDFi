@@ -134,7 +134,7 @@ export function MacroEconomicSection() {
   console.log(`[MacroEconomic] Looking for markets:`, KEY_MARKETS.map(m => m.id));
 
   return (
-    <section id="macro-economic" className="relative py-32 px-6" ref={ref}>
+    <section id="macro-outlook" className="relative py-32 px-6" ref={ref}>
       <div className="max-w-7xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 20 }}

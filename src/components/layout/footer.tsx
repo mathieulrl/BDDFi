@@ -8,6 +8,7 @@ const footerLinks = {
     { name: "How it works", href: "#how-it-works" },
     { name: "Macro Outlook", href: "#macro-outlook" },
     { name: "Tax Simulator", href: "#tax-simulator" },
+    { name: "PnL Simulator", href: "#pnl-simulator" },
     { name: "Dashboard", href: "#dashboard" },
     { name: "Documentation", href: "#docs" },
   ],

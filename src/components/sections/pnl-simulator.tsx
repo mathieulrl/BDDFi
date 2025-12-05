@@ -7,7 +7,7 @@ import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { Shield, TrendingDown, DollarSign, AlertTriangle, Calculator } from "lucide-react";
+import { Shield, TrendingDown, DollarSign, AlertTriangle, Calculator, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // Black-Scholes Put Option Pricing
@@ -144,11 +144,38 @@ export function PnLSimulatorSection({}: PnLSimulatorProps) {
           <h2 className="font-display text-4xl md:text-5xl font-bold mb-6">
             Smart-Hedged DeFi Lending Architecture
           </h2>
-          <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
+          <p className="text-lg text-muted-foreground max-w-3xl mx-auto mb-6">
             An interactive financial simulation modeling a dynamic hedging strategy on AAVE loans. 
             The engine integrates an auto-calibration algorithm (Smart Ratio) that adjusts the quantity of options (Put Spread) 
             to guarantee 100% net solvency during a liquidation event ("Total Loss Scenario").
           </p>
+          
+          {/* Deribit Integration Badge */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={isInView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="inline-flex items-center gap-3 px-6 py-3 rounded-full glass border border-white/10 hover:border-bitcoin/50 transition-all duration-300 group"
+          >
+            <div className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-bitcoin" />
+              <span className="text-sm text-muted-foreground">
+                Options powered by{" "}
+                <a 
+                  href="https://www.deribit.com/" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-bitcoin hover:text-bitcoin/80 font-semibold inline-flex items-center gap-1 transition-colors"
+                >
+                  Deribit
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </span>
+            </div>
+            <span className="text-xs px-2 py-1 rounded-full bg-bitcoin/10 text-bitcoin font-medium">
+              85%+ Market Share
+            </span>
+          </motion.div>
         </motion.div>
 
         <div className="grid lg:grid-cols-2 gap-6 mb-8">

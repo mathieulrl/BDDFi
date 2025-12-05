@@ -22,6 +22,7 @@ import { Zap, Menu, X, AlertTriangle, Loader2, Network } from "lucide-react";
 const navLinks = [
   { name: "How it works", href: "#how-it-works" },
   { name: "Macro Outlook", href: "#macro-economic" },
+  { name: "Tax Simulator", href: "#tax-simulator" },
   { name: "Dashboard", href: "#dashboard" },
   { name: "Docs", href: "#docs" },
 ];

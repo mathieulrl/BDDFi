@@ -335,13 +335,14 @@ export function getIncomeBand(magi: number, filingStatus: FilingStatus): IncomeB
 
 // Get income range display for a band
 export function getIncomeRangeDisplay(filingStatus: FilingStatus, incomeBand: IncomeBand): string {
+  // Normalize QW to MFJ for display
   const status = filingStatus === "qw" ? "mfj" : filingStatus;
   const [min, max] = INCOME_THRESHOLDS[status][incomeBand];
   
   if (max === Infinity) {
-    return `$${min.toLocaleString()}+`;
+    return `$${min.toLocaleString("en-US")}+`;
   }
-  return `$${min.toLocaleString()} – $${max.toLocaleString()}`;
+  return `$${min.toLocaleString("en-US")} – $${max.toLocaleString("en-US")}`;
 }
 
 // Get state name from code

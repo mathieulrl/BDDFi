@@ -11,9 +11,9 @@ import { useAccount } from "wagmi";
 import { ArrowDown, Sparkles, Shield, TrendingUp, Coins, Loader2 } from "lucide-react";
 
 const stats = [
-  { label: "Tax Savings Potential", value: "Up to 24%", icon: TrendingUp },
+  { label: "Tax Savings Potential", value: "Up to 40%", icon: TrendingUp },
   { label: "Supported Assets", value: "BTC • ETH", icon: Coins },
-  { label: "Max Borrowing Power", value: "80% LTV", icon: Shield },
+  { label: "Capital Protected", value: "100%", icon: Shield },
 ];
 
 // Ethereum Logo SVG Component

@@ -8,7 +8,6 @@ import {
   TrendingUp, 
   Landmark, 
   CreditCard,
-  ArrowRight,
   CheckCircle2,
   Zap,
   RefreshCw,
@@ -19,7 +18,7 @@ const steps = [
     number: "01",
     title: "Buy",
     subtitle: "Convert & Accumulate",
-    description: "Convert your USD to USDC via Circle. Set up automatic DCA into BTC, ETH, and SOL. Your crypto portfolio grows steadily over time.",
+    description: "Convert your FIAT currencies to USDC via Circle. Set up automatic DCA into BTC & ETH. Your crypto portfolio grows steadily over time without risk.",
     icon: Wallet,
     color: "bitcoin",
     details: [
@@ -45,7 +44,7 @@ const steps = [
     number: "03",
     title: "Die",
     subtitle: "Live Your Life",
-    description: "Use borrowed USDC for everyday expenses. Your crypto keeps appreciating. Rinse and repeat. Never sell, never trigger taxes.",
+    description: "Receive FIATs in exchange of your borrowed USDC for everyday expenses. Your deposited crypto keeps appreciating. Rinse and repeat. Never sell, never trigger taxes.",
     icon: CreditCard,
     color: "solana",
     details: [
@@ -101,7 +100,7 @@ export function HowItWorksSection() {
             <span className="gradient-text">Ultra-Wealthy</span>
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            What JPMorgan offers to crypto-millionaires, AAVE offers to everyone.
+            What private banks offer to millionaires, BBDFi offers to everyone.
             Three simple steps to financial freedom.
           </p>
         </motion.div>
@@ -184,15 +183,6 @@ export function HowItWorksSection() {
                     ))}
                   </ul>
                 </div>
-
-                {/* Arrow connector (except last) */}
-                {index < steps.length - 1 && (
-                  <div className="hidden lg:flex absolute -right-4 top-1/2 -translate-y-1/2 z-20">
-                    <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
-                      <ArrowRight className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                  </div>
-                )}
               </GlassCard>
             </motion.div>
           ))}

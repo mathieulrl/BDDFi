@@ -377,13 +377,13 @@ export function DashboardSection() {
   // STEP 1: Swaps only (OnchainKit, 1 tx par swap)
   const handleSwapOnly = async () => {
     if (!address || !depositAmount || parseFloat(depositAmount) <= 0) {
-      alert("Please enter a valid deposit amount");
+      console.log("Please enter a valid deposit amount");
       return;
     }
 
     const totalAllocation = quickDepositAllocations.reduce((a, b) => a + b, 0);
     if (totalAllocation !== 100) {
-      alert("Total allocation must equal 100%");
+      console.log("Total allocation must equal 100%");
       return;
     }
 
@@ -393,7 +393,7 @@ export function DashboardSection() {
       
       // Check USDC balance
       if (usdcAmount > Number(usdcBalanceFormatted)) {
-        alert(`Insufficient USDC balance. You have $${usdcBalanceFormatted}`);
+        console.log(`Insufficient USDC balance. You have $${usdcBalanceFormatted}`);
         setIsSwapping(false);
         return;
       }
@@ -450,12 +450,9 @@ export function DashboardSection() {
         });
       }
 
-      alert(
-        `✅ Swaps submitted!\n\nÉtape 1/2 terminée :\n- USDC → cbBTC\n- USDC → cbETH\n\nPasse ensuite à l'étape 2 : Deposit to Aave.`
-      );
+      console.log("✅ Swaps submitted! Step 1/2 completed: USDC → cbBTC, USDC → cbETH. Proceed to step 2: Deposit to Aave.");
     } catch (error: any) {
       console.error("Error in swaps:", error);
-      alert(`Error: ${error.message || "Transaction failed. Please try again."}`);
     } finally {
       setIsSwapping(false);
     }
@@ -491,7 +488,7 @@ export function DashboardSection() {
     }
 
     if (tokensForDeposit.length === 0) {
-      alert("No cbBTC / cbETH balance found to deposit. Run the swaps first.");
+      console.log("No cbBTC / cbETH balance found to deposit. Run the swaps first.");
       return;
     }
 
@@ -514,12 +511,9 @@ export function DashboardSection() {
         await supply(token.address, conservativeBalance);
       }
 
-      alert(
-        `✅ Deposits submitted!\n\nÉtape 2/2 : toutes les positions cbBTC / cbETH détectées ont été déposées sur Aave.`
-      );
+      console.log("✅ Deposits submitted! Step 2/2: All detected cbBTC / cbETH positions have been deposited to Aave.");
     } catch (error: any) {
       console.error("Error in deposits:", error);
-      alert(`Error: ${error.message || "Deposit transaction failed. Please try again."}`);
     } finally {
       setIsSwapping(false);
     }
@@ -1102,26 +1096,25 @@ export function DashboardSection() {
                           }
                           onClick={async () => {
                             if (!address) {
-                              alert("Connect your wallet first");
+                              console.log("Connect your wallet first");
                               return;
                             }
                             if (totalDeposited === 0) {
-                              alert("You need collateral deposited in Aave before borrowing.");
+                              console.log("You need collateral deposited in Aave before borrowing.");
                               return;
                             }
                             const amountUsd = getTargetBorrowAmount();
                             const maxBorrowUsd = totalDeposited * 0.8;
                             if (amountUsd > maxBorrowUsd) {
-                              alert(`Borrow amount exceeds safe maximum (${maxBorrowUsd.toFixed(2)} USDC).`);
+                              console.log(`Borrow amount exceeds safe maximum (${maxBorrowUsd.toFixed(2)} USDC).`);
                               return;
                             }
                             try {
                               const amountWei = BigInt(Math.round(amountUsd * 1_000_000)); // USDC 6 decimals
                               await borrow(contracts.USDC as `0x${string}`, amountWei);
-                              alert(`✅ Borrowed ${amountUsd.toFixed(2)} USDC from Aave.`);
+                              console.log(`✅ Borrowed ${amountUsd.toFixed(2)} USDC from Aave.`);
                             } catch (err: any) {
                               console.error("Error borrowing USDC:", err);
-                              alert(`Error borrowing USDC: ${err.message || "Transaction failed."}`);
                             }
                           }}
                         >
@@ -1231,13 +1224,13 @@ export function DashboardSection() {
                             }
                             onClick={async () => {
                               if (!address) {
-                                alert("Connect your wallet first");
+                                console.log("Connect your wallet first");
                                 return;
                               }
 
                               const repayAmountWei = getRepayAmountWei();
                               if (repayAmountWei <= BigInt(0)) {
-                                alert("No repayable USDC amount found (check your wallet balance and Aave debt).");
+                                console.log("No repayable USDC amount found (check your wallet balance and Aave debt).");
                                 return;
                               }
 
@@ -1245,20 +1238,20 @@ export function DashboardSection() {
                                 // Step 1: Approve if needed
                                 if (!usdcAllowance || usdcAllowance < repayAmountWei) {
                                   if (waitingForApproveConfirmation || isApprovePending || isApproveConfirming) {
-                                    alert("Please wait for the previous approval to be confirmed.");
+                                    console.log("Please wait for the previous approval to be confirmed.");
                                     return;
                                   }
                                   
                                   const approveAmount = repayAmountWei * BigInt(2);
                                   setWaitingForApproveConfirmation(true);
                                   await approve(contracts.USDC as `0x${string}`, approveAmount);
-                                  alert("✅ Approval submitted. Please wait for confirmation, then click Repay again.");
+                                  console.log("✅ Approval submitted. Please wait for confirmation, then click Repay again.");
                                   return;
                                 }
 
                                 // Step 2: Repay
                                 if (waitingForApproveConfirmation || isApprovePending || isApproveConfirming || isRepaying) {
-                                  alert("Please wait for the approval to be confirmed before repaying.");
+                                  console.log("Please wait for the approval to be confirmed before repaying.");
                                   return;
                                 }
 
@@ -1272,7 +1265,7 @@ export function DashboardSection() {
                                     : walletUsdcWei;
                                   
                                   if (finalRepayAmount <= BigInt(0)) {
-                                    alert("No repayable amount found.");
+                                    console.log("No repayable amount found.");
                                     setIsRepaying(false);
                                     return;
                                   }
@@ -1283,7 +1276,7 @@ export function DashboardSection() {
                                     await refetchAaveAccount();
                                   }, 1000);
                                   
-                                  alert("✅ Repay transaction submitted.");
+                                  console.log("✅ Repay transaction submitted.");
                                 } catch (err: any) {
                                   setIsRepaying(false);
                                   throw err;
@@ -1292,7 +1285,6 @@ export function DashboardSection() {
                                 }
                               } catch (err: any) {
                                 console.error("Error repaying USDC:", err);
-                                alert(`Error repaying USDC: ${err.message || "Transaction failed."}`);
                               }
                             }}
                           >

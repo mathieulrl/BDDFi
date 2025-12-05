@@ -11,18 +11,50 @@ import { useAccount } from "wagmi";
 import { ArrowDown, Sparkles, Shield, TrendingUp, Coins, Loader2 } from "lucide-react";
 
 const stats = [
-  { label: "Total Value Locked", value: "$1.2B+", icon: Shield },
-  { label: "Users", value: "50K+", icon: Sparkles },
-  { label: "APY Range", value: "2-8%", icon: TrendingUp },
+  { label: "Tax Savings Potential", value: "Up to 24%", icon: TrendingUp },
+  { label: "Supported Assets", value: "BTC • ETH", icon: Coins },
+  { label: "Max Borrowing Power", value: "80% LTV", icon: Shield },
 ];
 
+// Ethereum Logo SVG Component
+function EthereumLogo({ className = "w-8 h-8", color = "#627EEA" }: { className?: string; color?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+    >
+      <path
+        d="M11.944 17.97L4.58 13.62L11.943 24L19.308 13.62L11.944 17.97ZM11.944 0L4.58 12.22L11.944 16.5L19.308 12.22L11.944 0Z"
+        fill={color}
+      />
+    </svg>
+  );
+}
+
+// Bitcoin Logo Component - Using Unicode symbol for reliability
+function BitcoinLogo({ className = "w-8 h-8", color = "#F7931A" }: { className?: string; color?: string }) {
+  return (
+    <div
+      className={`rounded-full flex items-center justify-center ${className}`}
+      style={{ backgroundColor: color }}
+    >
+      <span className="text-white text-2xl md:text-3xl font-bold" style={{ fontFamily: 'Arial, sans-serif' }}>
+        ₿
+      </span>
+    </div>
+  );
+}
+
 const cryptoLogos = [
-  { name: "BTC", color: "#F7931A", symbol: "₿" },
-  { name: "ETH", color: "#627EEA", symbol: "Ξ" },
+  { name: "BTC", color: "#F7931A", component: BitcoinLogo },
+  { name: "ETH", color: "#627EEA", component: EthereumLogo },
 ];
 
 export function HeroSection() {
   const [mounted, setMounted] = useState(false);
+  const [showScrollIndicator, setShowScrollIndicator] = useState(true);
   const { isConnected } = useAccount();
 
   // Prevent hydration mismatch
@@ -30,33 +62,60 @@ export function HeroSection() {
     setMounted(true);
   }, []);
 
+  // Hide scroll indicator when user scrolls
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 100) {
+        setShowScrollIndicator(false);
+      } else {
+        setShowScrollIndicator(true);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   return (
-    <section className="relative min-h-screen flex items-center justify-center pt-32 pb-20 px-6">
-      {/* Floating crypto icons */}
+    <section className="relative min-h-screen flex items-center justify-center pt-32 pb-32 px-6">
+      {/* Floating crypto icons - Better positioned and more visible */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {cryptoLogos.map((crypto, i) => (
           <motion.div
             key={crypto.name}
             className="absolute"
             style={{
-              left: `${20 + i * 30}%`,
-              top: `${30 + i * 15}%`,
+              left: `${15 + i * 35}%`,
+              top: `${20 + i * 20}%`,
             }}
             animate={{
-              y: [0, -20, 0],
-              rotate: [0, 5, -5, 0],
+              y: [0, -30, 0],
+              rotate: [0, 10, -10, 0],
+              scale: [1, 1.1, 1],
             }}
             transition={{
-              duration: 4 + i,
+              duration: 5 + i * 1.5,
               repeat: Infinity,
               ease: "easeInOut",
             }}
           >
             <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold opacity-20"
-              style={{ backgroundColor: crypto.color }}
+              className="w-24 h-24 md:w-32 md:h-32 rounded-3xl flex items-center justify-center backdrop-blur-sm border-2"
+              style={{ 
+                backgroundColor: `${crypto.color}20`,
+                borderColor: `${crypto.color}40`,
+                boxShadow: `0 8px 32px ${crypto.color}30`,
+              }}
             >
-              {crypto.symbol}
+              <div
+                className="rounded-2xl p-3 md:p-4 flex items-center justify-center"
+                style={{ backgroundColor: `${crypto.color}30` }}
+              >
+                <crypto.component 
+                  className="w-12 h-12 md:w-16 md:h-16" 
+                  color={crypto.color}
+                />
+              </div>
             </div>
           </motion.div>
         ))}
@@ -169,22 +228,25 @@ export function HeroSection() {
           ))}
         </motion.div>
 
-        {/* Scroll indicator */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1 }}
-          className="absolute bottom-8 left-1/2 -translate-x-1/2"
-        >
+        {/* Scroll indicator - Only visible at top of page, positioned lower */}
+        {showScrollIndicator && (
           <motion.div
-            animate={{ y: [0, 8, 0] }}
-            transition={{ duration: 2, repeat: Infinity }}
-            className="flex flex-col items-center gap-2 text-muted-foreground"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ delay: 1 }}
+            className="absolute -bottom-16 left-1/2 -translate-x-1/2 z-20 w-full"
           >
-            <span className="text-xs">Scroll to explore</span>
-            <ArrowDown className="w-4 h-4" />
+            <motion.div
+              animate={{ y: [0, 8, 0] }}
+              transition={{ duration: 2, repeat: Infinity }}
+              className="flex flex-col items-center gap-2 text-muted-foreground"
+            >
+              <span className="text-xs font-medium">Scroll to explore</span>
+              <ArrowDown className="w-5 h-5" />
+            </motion.div>
           </motion.div>
-        </motion.div>
+        )}
       </div>
     </section>
   );

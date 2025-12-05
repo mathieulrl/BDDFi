@@ -37,7 +37,7 @@ export function CoinbaseOnrampButton() {
       ) : (
         <>
           <ArrowDownLeft className="w-4 h-4 mr-2" />
-          Buy USDC with Fiat {isSandbox && "(Sandbox)"}
+          Buy USDC with USD (Fiat) {isSandbox && "(Sandbox)"}
         </>
       )}
     </Button>
@@ -76,7 +76,7 @@ export function CoinbaseOfframpButton() {
       ) : (
         <>
           <ArrowUpRight className="w-4 h-4 mr-2" />
-          Sell USDC to Fiat {isSandbox && "(Sandbox)"}
+          Sell USDC to USD (Fiat) {isSandbox && "(Sandbox)"}
         </>
       )}
     </Button>

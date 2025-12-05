@@ -719,7 +719,7 @@ export function DashboardSection() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <ArrowDownUp className="w-5 h-5 text-usdc" />
-                      Fiat ↔ USDC
+                      USD (Fiat) ↔ USDC
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -730,7 +730,7 @@ export function DashboardSection() {
                         </div>
                         <h4 className="font-display font-semibold mb-2">Connect Wallet</h4>
                         <p className="text-sm text-muted-foreground mb-4">
-                          Connect your wallet to buy or sell USDC with fiat currency
+                          Connect your wallet to buy or sell USDC with USD (Fiat)
                         </p>
                         <Wallet>
                           <ConnectWallet className="!w-full !rounded-xl !py-3" />
@@ -916,7 +916,7 @@ export function DashboardSection() {
                         ) : (
                           <>
                             <ArrowDownUp className="w-4 h-4" />
-                            1. Swap USDC → cbBTC / cbETH
+                            Swap
                           </>
                         )}
                       </Button>

@@ -249,7 +249,7 @@ export function PnLSimulatorSection({}: PnLSimulatorProps) {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <Label>Spread Width ($)</Label>
-                  <span className="text-sm font-medium">${spreadWidth.toLocaleString()}</span>
+                  <span className="text-sm font-medium">${spreadWidth.toLocaleString("en-US")}</span>
                 </div>
                 <Slider
                   value={[spreadWidth]}
@@ -269,11 +269,11 @@ export function PnLSimulatorSection({}: PnLSimulatorProps) {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <GlassCard className="p-4">
             <div className="text-sm text-muted-foreground mb-1">Liquidation Price</div>
-            <div className="text-2xl font-bold">${liqPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+            <div className="text-2xl font-bold">${liqPrice.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div>
           </GlassCard>
           <GlassCard className="p-4">
             <div className="text-sm text-muted-foreground mb-1">Equity to Protect</div>
-            <div className="text-2xl font-bold">${equityAtLiq.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+            <div className="text-2xl font-bold">${equityAtLiq.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div>
             <p className="text-xs text-muted-foreground mt-1">Exact amount lost if liquidation happens</p>
           </GlassCard>
           <GlassCard className="p-4">
@@ -285,8 +285,8 @@ export function PnLSimulatorSection({}: PnLSimulatorProps) {
           </GlassCard>
           <GlassCard className="p-4">
             <div className="text-sm text-muted-foreground mb-1">Hedge Cost (Client)</div>
-            <div className="text-2xl font-bold">${costClient.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
-            <p className="text-xs text-muted-foreground mt-1">Commission: ${ourRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+            <div className="text-2xl font-bold">${costClient.toLocaleString("en-US", { maximumFractionDigits: 0 })}</div>
+            <p className="text-xs text-muted-foreground mt-1">Commission: ${ourRevenue.toLocaleString("en-US", { maximumFractionDigits: 0 })}</p>
           </GlassCard>
         </div>
 
@@ -320,8 +320,8 @@ export function PnLSimulatorSection({}: PnLSimulatorProps) {
                       border: '1px solid rgba(255,255,255,0.1)',
                       borderRadius: '8px'
                     }}
-                    formatter={(value: number) => `$${value.toLocaleString()}`}
-                    labelFormatter={(label) => `Price: $${label.toLocaleString()}`}
+                    formatter={(value: number) => `$${value.toLocaleString("en-US")}`}
+                    labelFormatter={(label) => `Price: $${label.toLocaleString("en-US")}`}
                   />
                   <Legend />
                   <Line 

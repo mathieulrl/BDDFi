@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Header } from "@/components/layout/header";
 import { HeroSection } from "@/components/sections/hero";
 import { HowItWorksSection } from "@/components/sections/how-it-works";
+import { MacroEconomicSection } from "@/components/sections/macro-economic";
 import { DashboardSection } from "@/components/sections/dashboard";
 import { Footer } from "@/components/layout/footer";
 
@@ -29,6 +30,7 @@ export default function Home() {
       >
         <HeroSection />
         <HowItWorksSection />
+        <MacroEconomicSection />
         <DashboardSection />
       </motion.div>
 

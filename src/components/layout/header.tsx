@@ -21,6 +21,7 @@ import { Zap, Menu, X, AlertTriangle, Loader2, Network } from "lucide-react";
 
 const navLinks = [
   { name: "How it works", href: "#how-it-works" },
+  { name: "Macro Outlook", href: "#macro-economic" },
   { name: "Dashboard", href: "#dashboard" },
   { name: "Docs", href: "#docs" },
 ];
@@ -200,7 +201,7 @@ export function Header() {
                   </div>
                   
                   <Wallet>
-                    <ConnectWallet>
+                    <ConnectWallet className="!rounded-2xl !px-4 !py-2 !bg-gradient-to-r !from-bitcoin !to-ethereum hover:!opacity-90 !text-white !font-semibold !shadow-lg !shadow-bitcoin/25 !transition-all !duration-200 hover:!scale-105">
                       <Avatar className="h-6 w-6" />
                       <Name />
                     </ConnectWallet>

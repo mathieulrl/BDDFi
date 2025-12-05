@@ -127,7 +127,56 @@ function AssetAllocation({
                 step={5}
                 onValueChange={(value) => {
                   const newAllocations = [...allocations];
-                  newAllocations[index] = value[0];
+                  const newValue = value[0];
+                  const oldValue = allocations[index];
+                  const difference = newValue - oldValue;
+                  
+                  // Calculate the total of other allocations (excluding current index)
+                  const otherTotal = allocations.reduce((sum, val, idx) => {
+                    return idx === index ? sum : sum + val;
+                  }, 0);
+                  
+                  // If there are other sliders, adjust them proportionally
+                  if (allocations.length > 1) {
+                    // Calculate how much we need to adjust the others
+                    const remaining = 100 - newValue;
+                    
+                    // Distribute the remaining percentage proportionally among other sliders
+                    if (otherTotal > 0 && remaining >= 0) {
+                      allocations.forEach((val, idx) => {
+                        if (idx !== index) {
+                          // Calculate proportional adjustment
+                          const proportion = val / otherTotal;
+                          newAllocations[idx] = Math.max(0, Math.min(100, remaining * proportion));
+                        }
+                      });
+                    } else if (remaining < 0) {
+                      // If new value exceeds 100%, cap it at 100% and set others to 0
+                      newAllocations[index] = 100;
+                      allocations.forEach((val, idx) => {
+                        if (idx !== index) {
+                          newAllocations[idx] = 0;
+                        }
+                      });
+                    }
+                  }
+                  
+                  // Set the current slider value
+                  newAllocations[index] = Math.max(0, Math.min(100, newValue));
+                  
+                  // Ensure total is exactly 100% by adjusting the last slider if needed
+                  const finalTotal = newAllocations.reduce((sum, val) => sum + val, 0);
+                  if (finalTotal !== 100 && allocations.length > 1) {
+                    const adjustment = 100 - finalTotal;
+                    // Find the last non-current slider and adjust it
+                    for (let i = allocations.length - 1; i >= 0; i--) {
+                      if (i !== index) {
+                        newAllocations[i] = Math.max(0, Math.min(100, newAllocations[i] + adjustment));
+                        break;
+                      }
+                    }
+                  }
+                  
                   onAllocationsChange(newAllocations);
                 }}
                 className="[&_[role=slider]]:bg-white"
@@ -522,16 +571,18 @@ export function DashboardSection() {
               <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-bitcoin/20 to-ethereum/20 flex items-center justify-center mx-auto mb-6">
                 <WalletIcon className="w-10 h-10 text-bitcoin" />
               </div>
-              <h3 className="font-display font-bold text-xl mb-4">
+              <h3 className="font-display font-bold text-xl mb-4 text-center">
                 Welcome to BBDFi
               </h3>
-              <p className="text-muted-foreground text-sm mb-6">
+              <p className="text-muted-foreground text-sm mb-6 text-center">
                 Connect with Coinbase Smart Wallet for the best experience.
                 Gasless transactions, easy onboarding.
               </p>
-              <Wallet>
-                <ConnectWallet className="!w-full !rounded-xl !py-3" />
-              </Wallet>
+              <div className="flex justify-center">
+                <Wallet>
+                  <ConnectWallet className="!rounded-xl !py-3" />
+                </Wallet>
+              </div>
             </GlassCard>
           </motion.div>
         </div>

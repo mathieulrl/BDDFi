@@ -111,15 +111,27 @@ export function MacroEconomicSection() {
   const isInView = useInView(ref, { once: true, margin: "-100px" });
 
   // Fetch markets - using economy tag if available, otherwise fetch specific markets
-  const { data: markets, isLoading } = usePolymarketMarkets(["economy", "politics", "fed"]);
+  const { data: markets, isLoading, isError } = usePolymarketMarkets(["economy", "politics", "fed"]);
+  
+  // Type guard to ensure markets is an array
+  const marketsArray = Array.isArray(markets) ? markets : [];
 
   // Create a map of market data by ID for quick lookup
   const marketDataMap = new Map();
-  if (markets) {
-    markets.forEach((market) => {
-      marketDataMap.set(market.id, market);
+  if (marketsArray.length > 0) {
+    console.log(`[MacroEconomic] Received ${marketsArray.length} markets:`, marketsArray.map(m => ({ id: m.id, slug: m.slug, question: m.question })));
+    marketsArray.forEach((market) => {
+      // Map by both id and slug to handle different formats
+      if (market.id) marketDataMap.set(market.id, market);
+      if (market.slug) marketDataMap.set(market.slug, market);
+      // Also try normalized versions (with/without dashes)
+      if (market.id) marketDataMap.set(market.id.replace(/-/g, "_"), market);
+      if (market.slug) marketDataMap.set(market.slug.replace(/-/g, "_"), market);
     });
   }
+  
+  console.log(`[MacroEconomic] Market data map keys:`, Array.from(marketDataMap.keys()));
+  console.log(`[MacroEconomic] Looking for markets:`, KEY_MARKETS.map(m => m.id));
 
   return (
     <section id="macro-economic" className="relative py-32 px-6" ref={ref}>
@@ -143,19 +155,29 @@ export function MacroEconomicSection() {
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-          {KEY_MARKETS.map((market, index) => (
-            <motion.div
-              key={market.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={isInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-            >
-              <MarketCard
-                market={market}
-                data={marketDataMap.get(market.id)}
-              />
-            </motion.div>
-          ))}
+          {KEY_MARKETS.map((market, index) => {
+            // Try multiple ways to find the market data
+            const marketData = marketDataMap.get(market.id) 
+              || marketDataMap.get(market.id.replace(/-/g, "_"))
+              || marketDataMap.get(market.id.replace(/_/g, "-"))
+              || marketsArray.find(m => m.id === market.id || m.slug === market.id || m.id?.includes(market.id) || m.slug?.includes(market.id));
+            
+            console.log(`[MacroEconomic] Market ${market.id} data:`, marketData ? "found" : "not found", marketData);
+            
+            return (
+              <motion.div
+                key={market.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={isInView ? { opacity: 1, y: 0 } : {}}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+              >
+                <MarketCard
+                  market={market}
+                  data={marketData}
+                />
+              </motion.div>
+            );
+          })}
         </div>
 
         {/* BTC/ETH Impact Analysis */}
@@ -196,10 +218,17 @@ export function MacroEconomicSection() {
           </GlassCard>
         </motion.div>
 
-        {isLoading && (
+        {isLoading && marketsArray.length === 0 && (
           <div className="text-center py-8">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto" />
             <p className="text-sm text-muted-foreground mt-4">Loading market data...</p>
+          </div>
+        )}
+        
+        {isError && marketsArray.length === 0 && (
+          <div className="text-center py-8">
+            <AlertTriangle className="w-8 h-8 text-yellow-400 mx-auto mb-4" />
+            <p className="text-sm text-muted-foreground">Failed to load market data. Using fallback data.</p>
           </div>
         )}
       </div>

@@ -127,8 +127,10 @@ function calculateLongTermGains(
   const niitThreshold = NIIT_THRESHOLDS[status];
   const incomeRange = INCOME_THRESHOLDS[status][incomeBand];
   
-  // Check if NIIT applies (MAGI above threshold)
-  const niitApplies = incomeRange[0] >= niitThreshold || (incomeRange[1] >= niitThreshold && incomeRange[0] < niitThreshold);
+  // Check if NIIT applies (MAGI strictly above threshold)
+  // NIIT applies if the minimum of the income band is above the threshold
+  // (meaning the entire band is above threshold)
+  const niitApplies = incomeRange[0] > niitThreshold;
   const niit = niitApplies ? 3.8 : 0;
   const effectiveRate = federalRate + niit;
   
@@ -169,8 +171,8 @@ function calculateShortTermGains(
   const niitThreshold = NIIT_THRESHOLDS[status];
   const incomeRange = INCOME_THRESHOLDS[status][incomeBand];
   
-  // Check if NIIT applies
-  const niitApplies = incomeRange[0] >= niitThreshold || (incomeRange[1] >= niitThreshold && incomeRange[0] < niitThreshold);
+  // Check if NIIT applies (MAGI strictly above threshold)
+  const niitApplies = incomeRange[0] > niitThreshold;
   const niit = niitApplies ? 3.8 : 0;
   const effectiveRate = stcgInfo.base + niit;
   
